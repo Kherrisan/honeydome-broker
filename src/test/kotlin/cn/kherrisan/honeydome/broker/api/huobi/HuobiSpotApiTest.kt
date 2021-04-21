@@ -1,7 +1,9 @@
 package cn.kherrisan.honeydome.broker.api.huobi
 
+import cn.kherrisan.honeydome.broker.common.BTC
 import cn.kherrisan.honeydome.broker.common.BTC_USDT
 import cn.kherrisan.honeydome.broker.common.KlinePeriod
+import cn.kherrisan.honeydome.broker.common.USDT
 import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
@@ -10,6 +12,7 @@ import org.junit.jupiter.api.Test
 import org.junit.jupiter.api.BeforeAll
 import org.junit.jupiter.api.TestInstance
 import java.time.ZonedDateTime
+import kotlin.test.AfterTest
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
 internal class HuobiSpotApiTest {
@@ -55,46 +58,19 @@ internal class HuobiSpotApiTest {
         assert(BTC_USDT in sdi)
     }
 
-    @ObsoleteCoroutinesApi
     @Test
-    fun subscribeAndUnsubscribeKline() = runBlocking {
-        huobiSpotApi.subscribeKline(BTC_USDT, KlinePeriod.DAY) {
-            println(it)
-        }
-        delay(5000)
-        huobiSpotApi.unsubscribeKline(BTC_USDT, KlinePeriod.DAY)
-        delay(2000)
+    fun getAccountId() = runBlocking {
+        huobiSpotApi.apiKey = System.getenv("huobi.api.key")
+        huobiSpotApi.apiSecret = System.getenv("huobi.api.secret")
+        assert(huobiSpotApi.accountId == null)
+        val id = huobiSpotApi.getAccountId()
+        println(id)
+        assert(huobiSpotApi.accountId != null)
     }
 
-    @ObsoleteCoroutinesApi
     @Test
-    fun subscribeLoadBalancer() = runBlocking {
-        huobiSpotApi.marketWs.SUBCSRIPTIONS_THRESHOLD = 2
-        huobiSpotApi.subscribeKline(BTC_USDT, KlinePeriod.DAY) {
-            println(it)
-        }
-        huobiSpotApi.subscribeKline("eth/usdt", KlinePeriod.DAY) {
-            println(it)
-        }
-        huobiSpotApi.subscribeKline("xrp/usdt", KlinePeriod.DAY) {
-            println(it)
-        }
-        delay(5000)
-        huobiSpotApi.unsubscribeKline("eth/usdt", KlinePeriod.DAY)
-        delay(2000)
-        huobiSpotApi.unsubscribeKline("xrp/usdt", KlinePeriod.DAY)
-        delay(2000)
-        huobiSpotApi.unsubscribeKline("btc/usdt", KlinePeriod.DAY)
-        delay(2000)
-    }
-
-    @ObsoleteCoroutinesApi
-    @Test
-    fun reconnectSubscribeAfterOffline() = runBlocking {
-        huobiSpotApi.subscribeKline("btc/usdt", KlinePeriod.DAY) {
-            println(it)
-        }
-        delay(60000)
-        huobiSpotApi.unsubscribeKline("btc/usdt", KlinePeriod.DAY)
+    fun getBalance() = runBlocking {
+        val balance = huobiSpotApi.getBalance()
+        println(balance["doge"])
     }
 }

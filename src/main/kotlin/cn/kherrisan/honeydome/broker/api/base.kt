@@ -38,14 +38,9 @@ interface SpotApi {
     suspend fun getCurrencys(): List<Currency>
     suspend fun getSymbols(): List<Symbol>
     suspend fun getKlines(symbol: Symbol, period: KlinePeriod, start: ZonedDateTime, end: ZonedDateTime): List<Kline>
-    suspend fun subscribeKline(symbol: Symbol, period: KlinePeriod, handle: suspend (Kline) -> Unit)
-    suspend fun unsubscribeKline(symbol: Symbol, period: KlinePeriod)
-    suspend fun subscribeBestBidAsk(symbol: Symbol, handle: suspend (BidAsk) -> Unit)
-    suspend fun unsubscribeBestBidAsk(symbol: Symbol)
-    suspend fun subscribeBalanceUpdate()
-    suspend fun unsubscribeBalanceUpdate()
-    suspend fun subscribeOrderUpdate()
-    suspend fun unsubscribeOrderUpdate()
+    suspend fun getBalance(): Map<Currency, Balance>
+    suspend fun getOrder(cid: String): Order
+    suspend fun getOrderMatch(oid: String): List<OrderMatch>
 }
 
 const val DEFAULT_DECIMAL_SCALE = 4

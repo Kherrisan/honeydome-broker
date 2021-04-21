@@ -2,9 +2,11 @@ package cn.kherrisan.honeydome.broker.api.huobi
 
 import cn.kherrisan.honeydome.broker.api.*
 import cn.kherrisan.honeydome.broker.common.*
+import cn.kherrisan.honeydome.broker.common.Currency
+import cn.kherrisan.honeydome.broker.gmt
+import cn.kherrisan.honeydome.broker.hmacSHA256Signature
 import cn.kherrisan.honeydome.broker.incrementId
 import cn.kherrisan.honeydome.broker.ungzip
-import cn.kherrisan.kommons.set
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -14,14 +16,30 @@ import io.vertx.ext.web.client.HttpResponse
 import io.vertx.kotlin.coroutines.await
 import kotlinx.coroutines.ObsoleteCoroutinesApi
 import org.slf4j.LoggerFactory
+import java.net.URLEncoder
+import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.ZoneId
 import java.time.ZonedDateTime
+import java.util.*
+import java.util.stream.Collectors
+import kotlin.collections.List
+import kotlin.collections.Map
+import kotlin.collections.forEach
+import kotlin.collections.map
+import kotlin.collections.mapOf
+import kotlin.collections.mutableMapOf
+import kotlin.collections.set
+import kotlin.collections.sorted
+import kotlin.collections.sortedBy
 import kotlin.math.min
 
 class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private val logger = LoggerFactory.getLogger(HuobiSpotApi::class.java)
+    var accountId: String? = null
+    lateinit var apiKey: String
+    lateinit var apiSecret: String
 
     @ObsoleteCoroutinesApi
     private fun marketWsFactory() = DefaultWebsocket("wss://api.huobi.pro/ws", handle = { buffer ->
@@ -80,36 +98,6 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         }
     }
 
-    private var authPromise = Promise.promise<Unit>()
-
-    @ObsoleteCoroutinesApi
-    private var tradingWs = DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
-        val clear = buffer.bytes.decodeToString()
-        logger.trace(clear)
-        val obj = JsonParser.parseString(clear).asJsonObject
-        val action = obj["action"].asString
-        when (action) {
-            "ping" -> {
-                //ping-pong
-                obj["action"] = "pong"
-                sendText(Gson().toJson(obj)))
-            }
-            "req" -> {
-                logger.debug(obj)
-                if (obj["ch"].asString == "auth" && obj["code"].asInt == 200) {
-                    authPromise.complete()
-                }
-            }
-            "sub" -> {
-            }
-            "unsub" -> {
-            }
-            "push" -> {
-                invokeSubscriptionHandle(clear, obj["ch"].asString)
-            }
-        }
-    })
-
     override val periodMap: Map<KlinePeriod, String>
         get() = mapOf(
             KlinePeriod.MINUTE to "1min",
@@ -123,11 +111,74 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private fun publicUrl(path: String) = "https://api.huobi.pro$path"
 
+    private fun authUrl(path: String) = "https://api.huobi.pro$path"
+
     private fun checkResponse(resp: HttpResponse<Buffer>) {
         val obj = JsonParser.parseString(resp.bodyAsString()).asJsonObject
         if (obj.has("status") && obj["status"].asString == "error") {
             error("Unsuccessful request with error response: $obj")
         }
+    }
+
+    private fun sortedUrlEncode(params: Map<String, Any>?): String {
+        if (params == null || params.isEmpty())
+            return ""
+        return params.keys.stream()
+            .map { key ->
+                val encoded = URLEncoder.encode(params[key].toString(), StandardCharsets.UTF_8.toString())
+                "$key=$encoded"
+            }
+            .sorted()
+            .collect(Collectors.joining("&"))
+    }
+
+//    private fun buildSignedSubpath(
+//        path: String,
+//        method: String,
+//        params: MutableMap<String, Any> = mutableMapOf()
+//    ): String {
+//        params["AccessKeyId"] = apiKey
+//        params["SignatureMethod"] = "HmacSHA256"
+//        params["SignatureVersion"] = "2"
+//        params["Timestamp"] = gmt()
+//        val sb = StringBuilder(1024)
+//        sb.append(method.toUpperCase()).append('\n')
+//            .append("api.huobi.pro").append('\n')
+//            .append(path.removePrefix("https://api.huobi.pro")).append('\n')
+//            .append(sortedUrlEncode(params))
+//        params["Signature"] =
+//            Base64.getEncoder().encodeToString(hmacSHA256Signature(sb.toString(), apiSecret))
+//        return "$path?${sortedUrlEncode(params)}"
+//    }
+
+    private fun sign(
+        method: String,
+        url: String,
+        params: MutableMap<String, String>
+    ) {
+        params["AccessKeyId"] = apiKey
+        params["SignatureMethod"] = "HmacSHA256"
+        params["SignatureVersion"] = "2"
+        params["Timestamp"] = gmt()
+        val sb = StringBuilder(1024)
+        sb.append(method.toUpperCase()).append('\n')
+            .append("api.huobi.pro").append('\n')
+            .append(url.removePrefix("https://api.huobi.pro")).append('\n')
+            .append(sortedUrlEncode(params))
+        params["Signature"] =
+            Base64.getEncoder().encodeToString(hmacSHA256Signature(sb.toString(), apiSecret))
+    }
+
+    suspend fun getAccountId(): String {
+        val params = mutableMapOf<String, String>()
+        sign("GET", authUrl("/v1/account/accounts"), params)
+        val resp = http.get(authUrl("/v1/account/accounts"), params)
+        val id = resp.toJson()["data"].asJsonArray.map { it.asJsonObject }
+            .filter { it["type"].asString == "spot" }
+            .map { it["id"].asLong.toString() }
+            .first()
+        accountId = id
+        return id
     }
 
     override suspend fun getCurrencys(): List<Currency> {
@@ -228,75 +279,33 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         return map
     }
 
-    @ObsoleteCoroutinesApi
-    override suspend fun subscribeKline(symbol: Symbol, period: KlinePeriod, handle: suspend (Kline) -> Unit) {
-        val id = "market.${symbol.replace("/", "")}.kline.${string(period)}"
-        if (subscriptionHandleMap.containsKey(id)) {
-            return
-        }
-        marketWs.subscribe(id)
-        subscriptionHandleMap[id] = {
-            val tick = JsonParser.parseString(it)["tick"].asJsonObject
-            handle(
-                kline(symbol, period, tick)
-            )
-        }
+    override suspend fun getBalance(): Map<Currency, Balance> {
+        val params = mutableMapOf<String, String>()
+        sign("GET", authUrl("/v1/account/accounts/${accountId ?: getAccountId()}/balance"), params)
+        val resp = http.get(authUrl("/v1/account/accounts/${accountId ?: getAccountId()}/balance"), params)
+        val balance = mutableMapOf<Currency, Balance>()
+        resp.toJson()["data"].asJsonObject["list"].asJsonArray.map { it.asJsonObject }
+            .forEach {
+                val c = it["currency"].asString
+                var b = balance[c]
+                if (b == null) {
+                    b = Balance()
+                    balance[c] = b
+                }
+                if (it["type"].asString == "trade") {
+                    b.free = balance(it["balance"].asString.toBigDecimal(), c)
+                } else {
+                    b.frozen = balance(it["balance"].asString.toBigDecimal(), c)
+                }
+            }
+        return balance
     }
 
-    @ObsoleteCoroutinesApi
-    override suspend fun unsubscribeKline(symbol: Symbol, period: KlinePeriod) {
-        val id = "market.${symbol.replace("/", "")}.kline.${string(period)}"
-        if (!subscriptionHandleMap.containsKey(id)) {
-            return
-        }
-        marketWs.unsubscribe(id)
+    override suspend fun getOrder(cid: String): Order {
+        TODO("Not yet implemented")
     }
 
-    @ObsoleteCoroutinesApi
-    override suspend fun subscribeBestBidAsk(symbol: Symbol, handle: suspend (BidAsk) -> Unit) {
-        val id = "market.${symbol.base}${symbol.quote}.bbo"
-        if (subscriptionHandleMap.containsKey(id)) {
-            return
-        }
-        marketWs.subscribe(id)
-        subscriptionHandleMap[id] = {
-            val tick = JsonParser.parseString(it)["tick"].asJsonObject
-            handle(
-                BidAsk(
-                    HUOBI,
-                    symbol,
-                    Instant.ofEpochSecond(tick["quoteTime"].asString.toLong()).atZone(ZoneId.systemDefault()),
-                    price(tick["bid"].asString.toBigDecimal(), symbol),
-                    amount(tick["bidSize"].asString.toBigDecimal(), symbol),
-                    price(tick["ask"].asString.toBigDecimal(), symbol),
-                    amount(tick["askSize"].asString.toBigDecimal(), symbol)
-                )
-            )
-        }
-    }
-
-    @ObsoleteCoroutinesApi
-    override suspend fun unsubscribeBestBidAsk(symbol: Symbol) {
-        val id = "market.${symbol.base}${symbol.quote}.bbo"
-        if (!subscriptionHandleMap.containsKey(id)) {
-            return
-        }
-        marketWs.unsubscribe(id)
-    }
-
-    override suspend fun subscribeBalanceUpdate() {
-        TODO("subscribeBalanceUpdate")
-    }
-
-    override suspend fun unsubscribeBalanceUpdate() {
-        TODO("unsubscribeBalanceUpdate")
-    }
-
-    override suspend fun subscribeOrderUpdate() {
-        TODO("subscribeOrderUpdate")
-    }
-
-    override suspend fun unsubscribeOrderUpdate() {
-        TODO("unsubscribeOrderUpdate")
+    override suspend fun getOrderMatch(oid: String): List<OrderMatch> {
+        TODO("Not yet implemented")
     }
 }
