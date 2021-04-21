@@ -1,30 +1,29 @@
 package cn.kherrisan.honeydome.broker.api.huobi
 
-import cn.kherrisan.honeydome.broker.common.BTC
 import cn.kherrisan.honeydome.broker.common.BTC_USDT
 import cn.kherrisan.honeydome.broker.common.KlinePeriod
-import cn.kherrisan.honeydome.broker.common.USDT
 import kotlinx.coroutines.ObsoleteCoroutinesApi
-import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
-import org.junit.jupiter.api.Test
-
-import org.junit.jupiter.api.BeforeAll
-import org.junit.jupiter.api.TestInstance
+import org.junit.jupiter.api.*
+import java.time.ZoneId
 import java.time.ZonedDateTime
-import kotlin.test.AfterTest
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
+@TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 internal class HuobiSpotApiTest {
 
     private lateinit var huobiSpotApi: HuobiSpotApi
+    private lateinit var limitOrderId: String
 
     @BeforeAll
     fun initHuobi() {
         huobiSpotApi = HuobiSpotApi()
+        huobiSpotApi.apiKey = System.getenv("huobi.api.key")
+        huobiSpotApi.apiSecret = System.getenv("huobi.api.secret")
     }
 
     @Test
+    @Order(1)
     fun getCurrencys() = runBlocking {
         val currencys = huobiSpotApi.getCurrencys()
         assert(currencys.size > 3)
@@ -34,6 +33,7 @@ internal class HuobiSpotApiTest {
     }
 
     @Test
+    @Order(2)
     fun getSymbols() = runBlocking {
         val symbols = huobiSpotApi.getSymbols()
         assert(symbols.size > 3)
@@ -42,6 +42,7 @@ internal class HuobiSpotApiTest {
 
     @ObsoleteCoroutinesApi
     @Test
+    @Order(3)
     fun getKlines() = runBlocking {
         val now = ZonedDateTime.now()
         val twentyDaysAge = now.minusDays(200)
@@ -52,6 +53,7 @@ internal class HuobiSpotApiTest {
     }
 
     @Test
+    @Order(4)
     fun getSymbolDecimalInfo() = runBlocking {
         val sdi = huobiSpotApi.getSymbolDecimalInfo()
         assert(sdi.size > 3)
@@ -59,18 +61,52 @@ internal class HuobiSpotApiTest {
     }
 
     @Test
+    @Order(5)
     fun getAccountId() = runBlocking {
-        huobiSpotApi.apiKey = System.getenv("huobi.api.key")
-        huobiSpotApi.apiSecret = System.getenv("huobi.api.secret")
-        assert(huobiSpotApi.accountId == null)
         val id = huobiSpotApi.getAccountId()
         println(id)
         assert(huobiSpotApi.accountId != null)
     }
 
     @Test
+    @Order(6)
     fun getBalance() = runBlocking {
         val balance = huobiSpotApi.getBalance()
         println(balance["doge"])
+    }
+
+    @Test
+    @Order(7)
+    fun getOrder() = runBlocking {
+        val oid = "255734557251357"
+        val order = huobiSpotApi.getOrder(oid, "doge/usdt")
+        println(order)
+    }
+
+    @Test
+    @Order(8)
+    fun getOrderMatch() = runBlocking {
+        val oid = "255734557251357"
+        val matches = huobiSpotApi.getOrderMatch(oid, "doge/usdt")
+        println(matches)
+    }
+
+    @Test
+    @Order(9)
+    fun searchOrder() = runBlocking {
+        val start = ZonedDateTime.of(2021, 4, 16, 0, 0, 0, 0, ZoneId.systemDefault())
+        val end = start.plusDays(1)
+        val orders = huobiSpotApi.searchOrders("doge/usdt", start, end)
+        println(orders)
+    }
+
+    @Test
+    @Order(10)
+    fun limitBuy() = runBlocking {
+    }
+
+    @Test
+    @Order(11)
+    fun limitSell() = runBlocking {
     }
 }

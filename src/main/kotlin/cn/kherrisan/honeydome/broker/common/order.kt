@@ -2,13 +2,12 @@ package cn.kherrisan.honeydome.broker.common
 
 import java.math.BigDecimal
 import java.time.ZonedDateTime
-import java.util.Currency
 
 enum class OrderSide {
     BUY, SELL
 }
 
-enum class OrderTypeEnum {
+enum class OrderType {
     LIMIT, MARKET
 }
 
@@ -41,10 +40,12 @@ data class Order(
     val oid: String,
     val coid: String,
     val symbol: Symbol,
+    val state: OrderState,
     val side: OrderSide,
     var price: BigDecimal,
+    val amount: BigDecimal,
     val createTime: ZonedDateTime,
-    val type: OrderTypeEnum,
+    val type: OrderType,
     val backtest: Boolean = false,
     val matches: MutableList<OrderMatch> = mutableListOf()
 )

@@ -39,8 +39,20 @@ interface SpotApi {
     suspend fun getSymbols(): List<Symbol>
     suspend fun getKlines(symbol: Symbol, period: KlinePeriod, start: ZonedDateTime, end: ZonedDateTime): List<Kline>
     suspend fun getBalance(): Map<Currency, Balance>
-    suspend fun getOrder(cid: String): Order
-    suspend fun getOrderMatch(oid: String): List<OrderMatch>
+    suspend fun getOrder(id: String, symbol: Symbol): Order
+    suspend fun getOrderMatch(oid: String, symbol: Symbol): List<OrderMatch>
+    suspend fun searchOrders(
+        symbol: Symbol,
+        start: ZonedDateTime,
+        end: ZonedDateTime = ZonedDateTime.now(),
+        state: OrderState? = null
+    ): List<Order>
+
+    suspend fun cancelOrder(oid: String, symbol: Symbol)
+    suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String
+    suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String
+    suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String
+    suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String
 }
 
 const val DEFAULT_DECIMAL_SCALE = 4

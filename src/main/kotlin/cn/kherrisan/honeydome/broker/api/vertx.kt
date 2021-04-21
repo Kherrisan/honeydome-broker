@@ -57,8 +57,8 @@ class VertxHttp {
 
     suspend fun post(
         path: String,
-        params: Map<String, Any>?,
-        headers: Map<String, String>?
+        params: Map<String, Any>? = null,
+        headers: Map<String, String>? = null
     ): HttpResponse<Buffer> {
         val req = client.postAbs(path)
         headers?.forEach { (t, u) -> req.putHeader(t, u) }

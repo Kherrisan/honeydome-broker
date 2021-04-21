@@ -16,6 +16,7 @@ import io.vertx.ext.web.client.HttpResponse
 import io.vertx.kotlin.coroutines.await
 import kotlinx.coroutines.ObsoleteCoroutinesApi
 import org.slf4j.LoggerFactory
+import java.math.BigDecimal
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -97,6 +98,13 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             e.printStackTrace()
         }
     }
+
+    val orderStateMap: Map<String, OrderState> = mapOf(
+        "created" to OrderState.CREATED,
+        "partial-filled" to OrderState.PARTIAL_FILLED,
+        "filled" to OrderState.FILLED,
+        "canceled" to OrderState.CANCELED
+    )
 
     override val periodMap: Map<KlinePeriod, String>
         get() = mapOf(
@@ -301,11 +309,149 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         return balance
     }
 
-    override suspend fun getOrder(cid: String): Order {
-        TODO("Not yet implemented")
+    private fun orderSide(str: String): OrderSide {
+        return if (str.contains("-")) {
+            val i = str.indexOf("-")
+            OrderSide.valueOf(str.substring(0, i).toUpperCase())
+        } else {
+            OrderSide.valueOf(str.toUpperCase())
+        }
     }
 
-    override suspend fun getOrderMatch(oid: String): List<OrderMatch> {
-        TODO("Not yet implemented")
+    private fun orderType(str: String): OrderType {
+        return if (str.contains("-")) {
+            // buy-limit
+            val i = str.indexOf("-")
+            OrderType.valueOf(str.substring(i + 1).toUpperCase())
+        } else {
+            // limit or market
+            OrderType.valueOf(str.toUpperCase())
+        }
+    }
+
+    override suspend fun getOrder(id: String, symbol: Symbol): Order {
+        val params = mutableMapOf<String, String>()
+        sign("GET", authUrl("/v1/order/orders/${id}"), params)
+        val resp = http.get(authUrl("/v1/order/orders/${id}"), params)
+        checkResponse(resp)
+        val it = resp.toJson()["data"].asJsonObject
+        return Order(
+            HUOBI,
+            it["id"].asLong.toString(),
+            id,
+            symbol,
+            orderStateMap[it["state"].asString]!!,
+            orderSide(it["type"].asString),
+            price(it["price"].asString.toBigDecimal(), symbol),
+            amount(it["amount"].asString.toBigDecimal(), symbol),
+            Instant.ofEpochMilli(it["created-at"].asLong).atZone(ZoneId.systemDefault()),
+            orderType(it["type"].asString)
+        )
+    }
+
+    override suspend fun getOrderMatch(oid: String, symbol: Symbol): List<OrderMatch> {
+        val params = mutableMapOf<String, String>()
+        sign("GET", authUrl("/v1/order/orders/$oid/matchresults"), params)
+        val resp = http.get(authUrl("/v1/order/orders/$oid/matchresults?${sortedUrlEncode(params)}"))
+        checkResponse(resp)
+        return resp.toJson()["data"].asJsonArray.map { it.asJsonObject }
+            .map {
+                val fc = it["fee-currency"].asString
+                OrderMatch(
+                    it["id"].asString,
+                    TradeRole.valueOf(it["role"].asString.toUpperCase()),
+                    price(it["price"].asString.toBigDecimal(), symbol),
+                    balance(it["filled-amount"].asString.toBigDecimal(), symbol),
+                    balance(it["filled-fees"].asString.toBigDecimal(), fc),
+                    fc,
+                    Instant.ofEpochMilli(it["created-at"].asLong).atZone(ZoneId.systemDefault())
+                )
+            }
+    }
+
+    override suspend fun searchOrders(
+        symbol: Symbol,
+        start: ZonedDateTime,
+        end: ZonedDateTime,
+        state: OrderState?
+    ): List<Order> {
+        val params = mutableMapOf(
+            "symbol" to symbol.replace("/", ""),
+            "start-time" to start.toInstant().toEpochMilli().toString(),
+            "end-time" to end.toInstant().toEpochMilli().toString(),
+        )
+        if (state == null) {
+            params["states"] = orderStateMap.keys.joinToString(",")
+        } else {
+            params["states"] = orderStateMap.filter { it.value == state }.keys.first()
+        }
+        sign("GET", authUrl("/v1/order/orders"), params)
+        val signedUrl = "/v1/order/orders?${sortedUrlEncode(params)}"
+        val resp = http.get(authUrl(signedUrl))
+        checkResponse(resp)
+        return resp.toJson()["data"].asJsonArray.map { it.asJsonObject }
+            .map {
+                Order(
+                    HUOBI,
+                    it["id"].asLong.toString(),
+                    it["client-order-id"].asString,
+                    symbol,
+                    orderStateMap[it["state"].asString]!!,
+                    orderSide(it["type"].asString),
+                    price(it["price"].asString.toBigDecimal(), symbol),
+                    amount(it["amount"].asString.toBigDecimal(), symbol),
+                    Instant.ofEpochMilli(it["created-at"].asLong).atZone(ZoneId.systemDefault()),
+                    orderType(it["type"].asString)
+                )
+            }
+    }
+
+    override suspend fun cancelOrder(oid: String, symbol: Symbol) {
+        val params = mutableMapOf<String, String>()
+        sign("POST", "/v1/order/orders/${oid}/submitcancel", params)
+        val resp = http.post(authUrl("/v1/order/orders/${oid}/submitcancel?${sortedUrlEncode(params)}"))
+        checkResponse(resp)
+    }
+
+    override suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String {
+        return createOrder(symbol, OrderType.LIMIT, OrderSide.BUY, price, amount)
+    }
+
+    override suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String {
+        return createOrder(symbol, OrderType.LIMIT, OrderSide.SELL, price, amount)
+    }
+
+    override suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String {
+        return createOrder(symbol, OrderType.MARKET, OrderSide.BUY, null, amount)
+    }
+
+    override suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String {
+        return createOrder(symbol, OrderType.MARKET, OrderSide.SELL, null, amount)
+    }
+
+    private suspend fun createOrder(
+        symbol: Symbol,
+        type: OrderType,
+        side: OrderSide,
+        price: BigDecimal?,
+        amount: BigDecimal
+    ): String {
+        var params = mutableMapOf<String, String>()
+        sign("POST", "/v1/order/orders/place", params)
+        val signedUrl = "/v1/order/orders/place?${sortedUrlEncode(params)}"
+        params = mutableMapOf(
+            "account-id" to (accountId ?: getAccountId()),
+            "symbol" to symbol.replace("/", ""),
+            "type" to "${side.toString().toLowerCase()}-${type.toString().toLowerCase()}",
+            "amount" to amount.toString(),
+            "source" to "api" // 现货交易填写“api”，杠杆交易填写“margin-api”
+        )
+        // 限价
+        if (type == OrderType.LIMIT) {
+            params["price"] = price.toString()
+        }
+        val resp = http.post(authUrl(signedUrl), params)
+        checkResponse(resp)
+        return resp.toJson()["data"].asString
     }
 }
