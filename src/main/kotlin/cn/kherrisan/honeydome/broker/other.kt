@@ -2,8 +2,7 @@ package cn.kherrisan.honeydome.broker
 
 import cn.kherrisan.honeydome.broker.api.VertxHolder
 import io.vertx.kotlin.coroutines.dispatcher
-import kotlinx.coroutines.CoroutineScope
-import kotlinx.coroutines.SupervisorJob
+import kotlinx.coroutines.*
 import java.io.ByteArrayInputStream
 import java.nio.charset.StandardCharsets
 import java.time.Instant
@@ -34,4 +33,11 @@ fun hmacSHA256Signature(content: String, secret: String): ByteArray {
     val mac = Mac.getInstance("HmacSHA256")
     mac.init(keySpec)
     return mac.doFinal(content.toByteArray())
+}
+
+suspend fun coroutineFixedRateTimer(millis: Long, handler: suspend () -> Unit): Job = GlobalScope.launch {
+    while (true) {
+        handler()
+        delay(millis)
+    }
 }

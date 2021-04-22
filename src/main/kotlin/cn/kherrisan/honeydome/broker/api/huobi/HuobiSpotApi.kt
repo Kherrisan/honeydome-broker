@@ -271,6 +271,11 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
                         it["value-precision"].asInt
                     )
             }
+        map.forEach { (symbol, decimal) ->
+            priceMap[symbol] = decimal.pricePrecision
+            volumeMap[symbol] = decimal.volumePrecision
+            amountMap[symbol] = decimal.amountPrecision
+        }
         return map
     }
 
@@ -284,6 +289,9 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
                 val currency = it["base-currency"].asString.toLowerCase()
                 map[currency] = min(it["amount-precision"].asInt, (map[currency] ?: 20))
             }
+        map.forEach { (currency, precision) ->
+            balanceMap[currency] = precision
+        }
         return map
     }
 

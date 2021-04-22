@@ -13,7 +13,6 @@ data class Kline(
     var low: BigDecimal,
     var volume: BigDecimal,
     var period: KlinePeriod,
-    var kid: String = ""
 )
 
 enum class KlinePeriod {
@@ -21,5 +20,16 @@ enum class KlinePeriod {
     QUARTER,
     HOUR,
     DAY,
-    WEEK
+    WEEK;
+
+    val seconds: Long
+        get() {
+            return when (this) {
+                MINUTE -> 60
+                QUARTER -> MINUTE.seconds * 15
+                HOUR -> QUARTER.seconds * 4
+                DAY -> HOUR.seconds * 24
+                WEEK -> DAY.seconds * 7
+            }
+        }
 }
