@@ -3,6 +3,7 @@ package cn.kherrisan.honeydome.broker.api.huobi
 import cn.kherrisan.honeydome.broker.common.BTC_USDT
 import cn.kherrisan.honeydome.broker.common.KlinePeriod
 import kotlinx.coroutines.ObsoleteCoroutinesApi
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.*
 import java.time.ZoneId
@@ -58,6 +59,49 @@ internal class HuobiSpotApiTest {
         val sdi = huobiSpotApi.getSymbolDecimalInfo()
         assert(sdi.size > 3)
         assert(BTC_USDT in sdi)
+    }
+
+    @ObsoleteCoroutinesApi
+    @Test
+    fun subscribeAndUnsubscribeKline() = runBlocking {
+        huobiSpotApi.subscribeKline(BTC_USDT, KlinePeriod.DAY) {
+            println(it)
+        }
+        delay(5000)
+        huobiSpotApi.unsubscribeKline(BTC_USDT, KlinePeriod.DAY)
+        delay(2000)
+    }
+
+    @ObsoleteCoroutinesApi
+    @Test
+    fun subscribeLoadBalancer() = runBlocking {
+        huobiSpotApi.marketWs.SUBCSRIPTIONS_THRESHOLD = 2
+        huobiSpotApi.subscribeKline(BTC_USDT, KlinePeriod.DAY) {
+            println(it)
+        }
+        huobiSpotApi.subscribeKline("eth/usdt", KlinePeriod.DAY) {
+            println(it)
+        }
+        huobiSpotApi.subscribeKline("xrp/usdt", KlinePeriod.DAY) {
+            println(it)
+        }
+        delay(5000)
+        huobiSpotApi.unsubscribeKline("eth/usdt", KlinePeriod.DAY)
+        delay(2000)
+        huobiSpotApi.unsubscribeKline("xrp/usdt", KlinePeriod.DAY)
+        delay(2000)
+        huobiSpotApi.unsubscribeKline("btc/usdt", KlinePeriod.DAY)
+        delay(2000)
+    }
+
+    @ObsoleteCoroutinesApi
+    @Test
+    fun reconnectSubscribeAfterOffline() = runBlocking {
+        huobiSpotApi.subscribeKline("btc/usdt", KlinePeriod.DAY) {
+            println(it)
+        }
+        delay(60000)
+        huobiSpotApi.unsubscribeKline("btc/usdt", KlinePeriod.DAY)
     }
 
     @Test

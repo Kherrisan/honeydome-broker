@@ -26,7 +26,7 @@ import java.util.*
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.schedule
 
-fun HttpResponse<Buffer>.toJson(): JsonObject {
+fun HttpResponse<Buffer>.toJsonElement(): JsonObject {
     return JsonParser.parseString(bodyAsString()).asJsonObject
 }
 
@@ -53,6 +53,22 @@ interface SpotApi {
     suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String
     suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String
     suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String
+    suspend fun subscribeBalanceUpdate()
+    suspend fun unsubscribeBalanceUpdate()
+    suspend fun subscribeOrderUpdate()
+    suspend fun unsubscribeOrderUpdate()
+
+    @ObsoleteCoroutinesApi
+    suspend fun unsubscribeBestBidAsk(symbol: Symbol)
+
+    @ObsoleteCoroutinesApi
+    suspend fun subscribeBestBidAsk(symbol: Symbol, handle: suspend (BidAsk) -> Unit)
+
+    @ObsoleteCoroutinesApi
+    suspend fun unsubscribeKline(symbol: Symbol, period: KlinePeriod)
+
+    @ObsoleteCoroutinesApi
+    suspend fun subscribeKline(symbol: Symbol, period: KlinePeriod, handle: suspend (Kline) -> Unit)
 }
 
 const val DEFAULT_DECIMAL_SCALE = 4
@@ -89,7 +105,6 @@ interface DecimalAdaptor {
 
 interface TextAdaptor {
     fun symbol(raw: String): Symbol = raw.toLowerCase()
-    fun currency(raw: String): Currency = raw.toLowerCase()
     fun period(raw: String): KlinePeriod = periodMap.entries.find { it.value == raw }?.key ?: error("")
     fun string(period: KlinePeriod): String = periodMap[period] ?: error("")
     val periodMap: Map<KlinePeriod, String>
@@ -171,10 +186,11 @@ class BalanceLoaderWebsocket(
 
 @ObsoleteCoroutinesApi
 class DefaultWebsocket(
-    val url: String,
+    private val url: String,
     val handle: suspend DefaultWebsocket.(Buffer) -> Unit,
-    val subscriptionFactory: (String) -> String,
-    val unsubscriptionFactory: (String) -> String
+    val subscriptionHandler: suspend Websocket.(String) -> Unit,
+    val unsubscriptionHandler: suspend Websocket.(String) -> Unit,
+    val authenticationHandler: (suspend Websocket.() -> Unit)? = null
 ) : CoroutineScope by defaultCoroutineScope(), Websocket {
 
     private var receiveChannel = Channel<Buffer>()
@@ -245,21 +261,21 @@ class DefaultWebsocket(
 
     override suspend fun subscribe(id: String) {
         subscriptions += id
-        sendText(subscriptionFactory(id))
+        subscriptionHandler(id)
     }
 
     override suspend fun unsubscribe(id: String) {
         subscriptions -= id
-        sendText(unsubscriptionFactory(id))
+        unsubscriptionHandler(id)
     }
 
-    private suspend fun resubscribeAll() {
+    private suspend fun subscribeAll() {
         subscriptions.forEach {
-            sendText(subscriptionFactory(it))
+            subscriptionHandler(it)
         }
     }
 
-    suspend fun tryBackoffReconnect() {
+    private suspend fun tryBackoffReconnect() {
         if (connectionMutex.compareAndSet(false, true)) {
             logger.debug("Reconnect $url in ${1 shl connectionBinaryBackoffBits} seconds")
             Timer().schedule(1000L * (1 shl connectionBinaryBackoffBits++)) {
@@ -318,7 +334,8 @@ class DefaultWebsocket(
             }
         }
         connectionBinaryBackoffBits = 1
-        resubscribeAll()
+        subscribeAll()
+        authenticationHandler?.invoke(this)
         logger.debug("Connected to $uri")
     }
 

@@ -7,6 +7,8 @@ import cn.kherrisan.honeydome.broker.gmt
 import cn.kherrisan.honeydome.broker.hmacSHA256Signature
 import cn.kherrisan.honeydome.broker.incrementId
 import cn.kherrisan.honeydome.broker.ungzip
+import cn.kherrisan.kommons.set
+import cn.kherrisan.kommons.toJson
 import com.google.gson.Gson
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
@@ -67,19 +69,19 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
                 invokeSubscriptionHandle(decoded, obj["ch"].asString)
             }
         }
-    }, subscriptionFactory = { id ->
-        Gson().toJson(
+    }, subscriptionHandler = { id ->
+        sendText(
             mapOf(
                 "sub" to id,
                 "id" to incrementId++
-            )
+            ).toJson()
         )
-    }, unsubscriptionFactory = { id ->
-        Gson().toJson(
+    }, unsubscriptionHandler = { id ->
+        sendText(
             mapOf(
                 "unsub" to id,
                 "id" to incrementId++
-            )
+            ).toJson()
         )
     })
 
@@ -87,6 +89,44 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     @ObsoleteCoroutinesApi
     val marketWs = BalanceLoaderWebsocket(this::marketWsFactory)
+
+    private var authPromise = Promise.promise<Unit>()
+
+    @ObsoleteCoroutinesApi
+    private var tradingWs = DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
+        val clear = buffer.bytes.decodeToString()
+        logger.trace(clear)
+        val obj = JsonParser.parseString(clear).asJsonObject
+        when (obj["action"].asString) {
+            "ping" -> {
+                //ping-pong
+                obj["action"] = "pong"
+                sendText(Gson().toJson(obj))
+            }
+            "req" -> {
+                logger.debug(obj.toString())
+                if (obj["ch"].asString == "auth" && obj["code"].asInt == 200) {
+                    authPromise.complete()
+                }
+            }
+            "sub" -> {
+            }
+            "unsub" -> {
+            }
+            "push" -> {
+                invokeSubscriptionHandle(clear, obj["ch"].asString)
+            }
+        }
+    }, subscriptionHandler = { id ->
+        sendText(
+            mapOf(
+                "action" to "sub",
+                "ch" to id
+            ).toJson()
+        )
+    }, unsubscriptionHandler = {}, authenticationHandler = {
+
+    })
 
     private suspend fun invokeSubscriptionHandle(clear: String, ch: String) {
         try {
@@ -99,7 +139,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         }
     }
 
-    val orderStateMap: Map<String, OrderState> = mapOf(
+    private val orderStateMap: Map<String, OrderState> = mapOf(
         "created" to OrderState.CREATED,
         "partial-filled" to OrderState.PARTIAL_FILLED,
         "filled" to OrderState.FILLED,
@@ -140,25 +180,6 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             .collect(Collectors.joining("&"))
     }
 
-//    private fun buildSignedSubpath(
-//        path: String,
-//        method: String,
-//        params: MutableMap<String, Any> = mutableMapOf()
-//    ): String {
-//        params["AccessKeyId"] = apiKey
-//        params["SignatureMethod"] = "HmacSHA256"
-//        params["SignatureVersion"] = "2"
-//        params["Timestamp"] = gmt()
-//        val sb = StringBuilder(1024)
-//        sb.append(method.toUpperCase()).append('\n')
-//            .append("api.huobi.pro").append('\n')
-//            .append(path.removePrefix("https://api.huobi.pro")).append('\n')
-//            .append(sortedUrlEncode(params))
-//        params["Signature"] =
-//            Base64.getEncoder().encodeToString(hmacSHA256Signature(sb.toString(), apiSecret))
-//        return "$path?${sortedUrlEncode(params)}"
-//    }
-
     private fun sign(
         method: String,
         url: String,
@@ -181,7 +202,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         val params = mutableMapOf<String, String>()
         sign("GET", authUrl("/v1/account/accounts"), params)
         val resp = http.get(authUrl("/v1/account/accounts"), params)
-        val id = resp.toJson()["data"].asJsonArray.map { it.asJsonObject }
+        val id = resp.toJsonElement()["data"].asJsonArray.map { it.asJsonObject }
             .filter { it["type"].asString == "spot" }
             .map { it["id"].asLong.toString() }
             .first()
@@ -192,7 +213,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     override suspend fun getCurrencys(): List<Currency> {
         val resp = http.get(publicUrl("/v1/common/currencys"))
         checkResponse(resp)
-        return resp.toJson()["data"].asJsonArray
+        return resp.toJsonElement()["data"].asJsonArray
             .map { it.asString.toLowerCase() }
             .sorted()
             .map { it.toLowerCase() }
@@ -201,7 +222,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     override suspend fun getSymbols(): List<Symbol> {
         val resp = http.get(publicUrl("/v1/common/symbols"))
         checkResponse(resp)
-        return resp.toJson()["data"].asJsonArray
+        return resp.toJsonElement()["data"].asJsonArray
             .map { it.asJsonObject }
             .map {
                 it["base-currency"].asString.toLowerCase() +
@@ -261,7 +282,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         val resp = http.get(publicUrl("/v1/common/symbols"))
         checkResponse(resp)
         val map = mutableMapOf<Symbol, SymbolDecimalInfo>()
-        resp.toJson()["data"].asJsonArray
+        resp.toJsonElement()["data"].asJsonArray
             .map { it.asJsonObject }
             .forEach {
                 map[symbol(it["base-currency"], it["quote-currency"])] =
@@ -283,7 +304,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         val resp = http.get(publicUrl("/v1/common/symbols"))
         checkResponse(resp)
         val map = mutableMapOf<Currency, Int>()
-        resp.toJson()["data"].asJsonArray
+        resp.toJsonElement()["data"].asJsonArray
             .map { it.asJsonObject }
             .forEach {
                 val currency = it["base-currency"].asString.toLowerCase()
@@ -300,7 +321,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         sign("GET", authUrl("/v1/account/accounts/${accountId ?: getAccountId()}/balance"), params)
         val resp = http.get(authUrl("/v1/account/accounts/${accountId ?: getAccountId()}/balance"), params)
         val balance = mutableMapOf<Currency, Balance>()
-        resp.toJson()["data"].asJsonObject["list"].asJsonArray.map { it.asJsonObject }
+        resp.toJsonElement()["data"].asJsonObject["list"].asJsonArray.map { it.asJsonObject }
             .forEach {
                 val c = it["currency"].asString
                 var b = balance[c]
@@ -342,7 +363,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         sign("GET", authUrl("/v1/order/orders/${id}"), params)
         val resp = http.get(authUrl("/v1/order/orders/${id}"), params)
         checkResponse(resp)
-        val it = resp.toJson()["data"].asJsonObject
+        val it = resp.toJsonElement()["data"].asJsonObject
         return Order(
             HUOBI,
             it["id"].asLong.toString(),
@@ -362,7 +383,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         sign("GET", authUrl("/v1/order/orders/$oid/matchresults"), params)
         val resp = http.get(authUrl("/v1/order/orders/$oid/matchresults?${sortedUrlEncode(params)}"))
         checkResponse(resp)
-        return resp.toJson()["data"].asJsonArray.map { it.asJsonObject }
+        return resp.toJsonElement()["data"].asJsonArray.map { it.asJsonObject }
             .map {
                 val fc = it["fee-currency"].asString
                 OrderMatch(
@@ -397,7 +418,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         val signedUrl = "/v1/order/orders?${sortedUrlEncode(params)}"
         val resp = http.get(authUrl(signedUrl))
         checkResponse(resp)
-        return resp.toJson()["data"].asJsonArray.map { it.asJsonObject }
+        return resp.toJsonElement()["data"].asJsonArray.map { it.asJsonObject }
             .map {
                 Order(
                     HUOBI,
@@ -460,6 +481,78 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         }
         val resp = http.post(authUrl(signedUrl), params)
         checkResponse(resp)
-        return resp.toJson()["data"].asString
+        return resp.toJsonElement()["data"].asString
+    }
+
+    @ObsoleteCoroutinesApi
+    override suspend fun subscribeKline(symbol: Symbol, period: KlinePeriod, handle: suspend (Kline) -> Unit) {
+        val id = "market.${symbol.replace("/", "")}.kline.${string(period)}"
+        if (subscriptionHandleMap.containsKey(id)) {
+            return
+        }
+        marketWs.subscribe(id)
+        subscriptionHandleMap[id] = {
+            val tick = JsonParser.parseString(it)["tick"].asJsonObject
+            handle(
+                kline(symbol, period, tick)
+            )
+        }
+    }
+
+    @ObsoleteCoroutinesApi
+    override suspend fun unsubscribeKline(symbol: Symbol, period: KlinePeriod) {
+        val id = "market.${symbol.replace("/", "")}.kline.${string(period)}"
+        if (!subscriptionHandleMap.containsKey(id)) {
+            return
+        }
+        marketWs.unsubscribe(id)
+    }
+
+    @ObsoleteCoroutinesApi
+    override suspend fun subscribeBestBidAsk(symbol: Symbol, handle: suspend (BidAsk) -> Unit) {
+        val id = "market.${symbol.base}${symbol.quote}.bbo"
+        if (subscriptionHandleMap.containsKey(id)) {
+            return
+        }
+        marketWs.subscribe(id)
+        subscriptionHandleMap[id] = {
+            val tick = JsonParser.parseString(it)["tick"].asJsonObject
+            handle(
+                BidAsk(
+                    HUOBI,
+                    symbol,
+                    Instant.ofEpochSecond(tick["quoteTime"].asString.toLong()).atZone(ZoneId.systemDefault()),
+                    price(tick["bid"].asString.toBigDecimal(), symbol),
+                    amount(tick["bidSize"].asString.toBigDecimal(), symbol),
+                    price(tick["ask"].asString.toBigDecimal(), symbol),
+                    amount(tick["askSize"].asString.toBigDecimal(), symbol)
+                )
+            )
+        }
+    }
+
+    @ObsoleteCoroutinesApi
+    override suspend fun unsubscribeBestBidAsk(symbol: Symbol) {
+        val id = "market.${symbol.base}${symbol.quote}.bbo"
+        if (!subscriptionHandleMap.containsKey(id)) {
+            return
+        }
+        marketWs.unsubscribe(id)
+    }
+
+    override suspend fun subscribeBalanceUpdate() {
+        TODO("subscribeBalanceUpdate")
+    }
+
+    override suspend fun unsubscribeBalanceUpdate() {
+        TODO("unsubscribeBalanceUpdate")
+    }
+
+    override suspend fun subscribeOrderUpdate() {
+        TODO("subscribeOrderUpdate")
+    }
+
+    override suspend fun unsubscribeOrderUpdate() {
+        TODO("unsubscribeOrderUpdate")
     }
 }

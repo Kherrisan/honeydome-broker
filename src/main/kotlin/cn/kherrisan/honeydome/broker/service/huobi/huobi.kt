@@ -2,9 +2,9 @@ package cn.kherrisan.honeydome.broker.service.huobi
 
 import cn.kherrisan.honeydome.broker.api.huobi.HuobiSpotApi
 import cn.kherrisan.honeydome.broker.common.HUOBI
-import cn.kherrisan.honeydome.broker.service.AbstractSpotService
+import cn.kherrisan.honeydome.broker.service.AbstractSpotFirmbargainService
 
-class HuobiSpotService : AbstractSpotService(HUOBI, HuobiSpotApi()) {
+class HuobiSpotFirmbargainService : AbstractSpotFirmbargainService(HUOBI, HuobiSpotApi()) {
     override val klineRequestLimit: Int
         get() = 300
 }

@@ -2,6 +2,7 @@ package cn.kherrisan.honeydome.broker
 
 import cn.hutool.core.util.IdUtil
 import cn.kherrisan.honeydome.broker.api.VertxHolder
+import com.google.gson.Gson
 import io.vertx.kotlin.coroutines.dispatcher
 import kotlinx.coroutines.*
 import java.io.ByteArrayInputStream

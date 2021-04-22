@@ -30,7 +30,7 @@ interface SpotService {
     suspend fun marketSell(symbol: Symbol, amount: BigDecimal): Order
 }
 
-abstract class AbstractSpotService(private val exchange: Exchange, private val spotApi: SpotApi) : SpotService {
+abstract class AbstractSpotFirmbargainService(private val exchange: Exchange, private val spotApi: SpotApi) : SpotService {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
 
