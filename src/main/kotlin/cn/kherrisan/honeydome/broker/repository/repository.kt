@@ -3,10 +3,12 @@ package cn.kherrisan.honeydome.broker.repository
 import cn.kherrisan.honeydome.broker.common.*
 import com.google.gson.Gson
 import com.mongodb.MongoBulkWriteException
-import com.mongodb.bulk.BulkWriteError
 import com.mongodb.client.model.BulkWriteOptions
 import com.mongodb.client.model.IndexOptions
-import org.litote.kmongo.*
+import org.litote.kmongo.eq
+import org.litote.kmongo.gte
+import org.litote.kmongo.insertOne
+import org.litote.kmongo.lt
 import java.time.ZonedDateTime
 
 object CommonInfoRepository : Repository() {
@@ -73,5 +75,18 @@ object BalanceRepository : Repository() {
     suspend fun save(snapshot: BalanceSnapshot) {
         db.getCollection<BalanceSnapshot>()
             .save(snapshot)
+    }
+}
+
+object OrderRepository : Repository() {
+
+    suspend fun save(order: Order) {
+        db.getCollection<Order>()
+            .save(order)
+    }
+
+    suspend fun queryByCoid(cid: String): Order? {
+        return db.getCollection<Order>()
+            .findOne(Order::coid eq cid)
     }
 }

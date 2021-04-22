@@ -1,14 +1,18 @@
 package cn.kherrisan.honeydome.broker.service
 
+import cn.kherrisan.honeydome.broker.Config
 import cn.kherrisan.honeydome.broker.api.DecimalAdaptor
 import cn.kherrisan.honeydome.broker.api.SpotApi
 import cn.kherrisan.honeydome.broker.common.*
 import cn.kherrisan.honeydome.broker.common.Currency
 import cn.kherrisan.honeydome.broker.coroutineFixedRateTimer
+import cn.kherrisan.honeydome.broker.randomId
 import cn.kherrisan.honeydome.broker.repository.BalanceRepository
 import cn.kherrisan.honeydome.broker.repository.CommonInfoRepository
 import cn.kherrisan.honeydome.broker.repository.KlineRepository
-import kotlinx.coroutines.*
+import cn.kherrisan.kommons.get
+import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.time.ZonedDateTime
@@ -20,10 +24,10 @@ interface SpotService {
     suspend fun getOrder(cid: String): Order
     suspend fun getOrderMatch(cid: String): List<OrderMatch>
     suspend fun cancelOrder(cid: String)
-    suspend fun limitBuy(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String
-    suspend fun limitSell(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String
-    suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String
-    suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String
+    suspend fun limitBuy(symbol: Symbol, price: BigDecimal, amount: BigDecimal): Order
+    suspend fun limitSell(symbol: Symbol, price: BigDecimal, amount: BigDecimal): Order
+    suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): Order
+    suspend fun marketSell(symbol: Symbol, amount: BigDecimal): Order
 }
 
 abstract class AbstractSpotService(private val exchange: Exchange, private val spotApi: SpotApi) : SpotService {
@@ -35,10 +39,10 @@ abstract class AbstractSpotService(private val exchange: Exchange, private val s
     private lateinit var periodicalUpdateJob: Job
     private lateinit var info: CommonInfo
     private lateinit var apiKey: String
-    private lateinit var apiSecret: String
+    private lateinit var secretKey: String
     private val hasLogined: Boolean
-        get() = this::apiKey.isInitialized && this::apiSecret.isInitialized
-            && apiKey.isNotEmpty() && apiSecret.isNotEmpty()
+        get() = this::apiKey.isInitialized && this::secretKey.isInitialized
+            && apiKey.isNotEmpty() && secretKey.isNotEmpty()
 
     open suspend fun setup() {
         var dbCommonInfo = CommonInfoRepository.queryCommonInfo(exchange)
@@ -59,6 +63,8 @@ abstract class AbstractSpotService(private val exchange: Exchange, private val s
             info.symbolDecimalInfo = (spotApi as DecimalAdaptor).getSymbolDecimalInfo().toMutableMap()
             CommonInfoRepository.save(info)
         }
+        apiKey = Config["exchange"]["huobi"]["apiKey"].asString
+        secretKey = Config["exchange"]["huobi"]["secretKey"].asString
     }
 
     override suspend fun getKline(
@@ -141,22 +147,78 @@ abstract class AbstractSpotService(private val exchange: Exchange, private val s
     }
 
     override suspend fun cancelOrder(cid: String) {
-        TODO("Not yet implemented")
+
     }
 
-    override suspend fun limitBuy(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String {
-        TODO("Not yet implemented")
+    override suspend fun limitBuy(symbol: Symbol, price: BigDecimal, amount: BigDecimal): Order {
+        val coid = randomId()
+        val order = Order(
+            HUOBI,
+            "",
+            coid,
+            symbol,
+            OrderState.CREATED,
+            OrderSide.BUY,
+            price,
+            amount,
+            ZonedDateTime.now(),
+            OrderType.LIMIT
+        )
+        order.oid = spotApi.limitBuy(symbol, price, amount)
+        return order
     }
 
-    override suspend fun limitSell(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String {
-        TODO("Not yet implemented")
+    override suspend fun limitSell(symbol: Symbol, price: BigDecimal, amount: BigDecimal): Order {
+        val coid = randomId()
+        val order = Order(
+            HUOBI,
+            "",
+            coid,
+            symbol,
+            OrderState.CREATED,
+            OrderSide.SELL,
+            price,
+            amount,
+            ZonedDateTime.now(),
+            OrderType.LIMIT
+        )
+        order.oid = spotApi.limitBuy(symbol, price, amount)
+        return order
     }
 
-    override suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String {
-        TODO("Not yet implemented")
+    override suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): Order {
+        val coid = randomId()
+        val order = Order(
+            HUOBI,
+            "",
+            coid,
+            symbol,
+            OrderState.CREATED,
+            OrderSide.BUY,
+            0f.toBigDecimal(),
+            amount,
+            ZonedDateTime.now(),
+            OrderType.MARKET
+        )
+        order.oid = spotApi.marketBuy(symbol, amount)
+        return order
     }
 
-    override suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String {
-        TODO("Not yet implemented")
+    override suspend fun marketSell(symbol: Symbol, amount: BigDecimal): Order {
+        val coid = randomId()
+        val order = Order(
+            HUOBI,
+            "",
+            coid,
+            symbol,
+            OrderState.CREATED,
+            OrderSide.SELL,
+            BigDecimal.ZERO,
+            amount,
+            ZonedDateTime.now(),
+            OrderType.MARKET
+        )
+        order.oid = spotApi.marketSell(symbol, amount)
+        return order
     }
 }

@@ -1,7 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.4.21"
+    kotlin("jvm") version "1.4.30"
+    kotlin("plugin.serialization") version "1.4.30"
     application
 }
 
@@ -39,11 +40,12 @@ dependencies {
     implementation("org.slf4j:slf4j-api:1.7.25")
 
     // json(gson)
+    implementation("org.jetbrains.kotlinx:kotlinx-serialization-json:1.1.0")
     implementation("com.google.code.gson:gson:2.8.6")
 
     // kmongo
-    implementation("org.litote.kmongo:kmongo:4.2.5")
-    implementation("org.litote.kmongo:kmongo-coroutine:4.2.5")
+    implementation("org.litote.kmongo:kmongo-serialization:4.2.5")
+    implementation("org.litote.kmongo:kmongo-coroutine-serialization:4.2.5")
 
     //vertx 的协程工具
     implementation("io.vertx:vertx-lang-kotlin-coroutines:$vertx_version")

@@ -1,5 +1,6 @@
 package cn.kherrisan.honeydome.broker
 
+import cn.hutool.core.util.IdUtil
 import cn.kherrisan.honeydome.broker.api.VertxHolder
 import io.vertx.kotlin.coroutines.dispatcher
 import kotlinx.coroutines.*
@@ -41,3 +42,5 @@ suspend fun coroutineFixedRateTimer(millis: Long, handler: suspend () -> Unit): 
         delay(millis)
     }
 }
+
+fun randomId(): String = IdUtil.randomUUID().substring(0, 9)

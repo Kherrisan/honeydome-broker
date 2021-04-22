@@ -1,15 +1,11 @@
 package cn.kherrisan.honeydome.broker.repository
 
-import cn.kherrisan.honeydome.broker.common.Kline
-import com.google.gson.Gson
-import com.mongodb.client.model.CreateCollectionOptions
-import com.mongodb.client.model.IndexOptions
-import kotlinx.coroutines.runBlocking
-import org.bson.BSONObject
-import org.bson.BasicBSONObject
+import com.github.jershell.kbson.BigDecimalSerializer
 import org.litote.kmongo.coroutine.CoroutineDatabase
 import org.litote.kmongo.coroutine.coroutine
 import org.litote.kmongo.reactivestreams.KMongo
+import org.litote.kmongo.serialization.ZonedDateTimeSerializer
+import org.litote.kmongo.serialization.registerSerializer
 
 open class Repository() {
     val db = Mongodb.db
@@ -25,6 +21,8 @@ object Mongodb {
     }
 
     suspend fun setup() {
+        registerSerializer(ZonedDateTimeSerializer)
+        registerSerializer(BigDecimalSerializer)
         KlineRepository.setup()
     }
 }

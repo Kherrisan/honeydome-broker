@@ -74,13 +74,13 @@ interface DecimalAdaptor {
         raw.setScale(volumeMap.getOrDefault(symbol, DEFAULT_DECIMAL_SCALE), RoundingMode.DOWN)
 
     val priceMap: MutableMap<Symbol, Int>
-        get() = mapOf()
+        get() = mutableMapOf()
     val amountMap: MutableMap<Symbol, Int>
-        get() = mapOf()
+        get() = mutableMapOf()
     val volumeMap: MutableMap<Symbol, Int>
-        get() = mapOf()
+        get() = mutableMapOf()
     val balanceMap: MutableMap<Currency, Int>
-        get() = mapOf()
+        get() = mutableMapOf()
 
     suspend fun getSymbolDecimalInfo(): Map<Symbol, SymbolDecimalInfo>
 

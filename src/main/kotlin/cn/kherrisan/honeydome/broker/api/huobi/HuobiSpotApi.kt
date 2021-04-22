@@ -40,7 +40,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     private val logger = LoggerFactory.getLogger(HuobiSpotApi::class.java)
     var accountId: String? = null
     lateinit var apiKey: String
-    lateinit var apiSecret: String
+    lateinit var secretKey: String
 
     @ObsoleteCoroutinesApi
     private fun marketWsFactory() = DefaultWebsocket("wss://api.huobi.pro/ws", handle = { buffer ->
@@ -174,7 +174,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             .append(url.removePrefix("https://api.huobi.pro")).append('\n')
             .append(sortedUrlEncode(params))
         params["Signature"] =
-            Base64.getEncoder().encodeToString(hmacSHA256Signature(sb.toString(), apiSecret))
+            Base64.getEncoder().encodeToString(hmacSHA256Signature(sb.toString(), secretKey))
     }
 
     suspend fun getAccountId(): String {

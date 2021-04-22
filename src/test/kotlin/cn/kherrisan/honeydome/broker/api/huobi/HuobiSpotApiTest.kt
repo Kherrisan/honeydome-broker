@@ -19,7 +19,7 @@ internal class HuobiSpotApiTest {
     fun initHuobi() {
         huobiSpotApi = HuobiSpotApi()
         huobiSpotApi.apiKey = System.getenv("huobi.api.key")
-        huobiSpotApi.apiSecret = System.getenv("huobi.api.secret")
+        huobiSpotApi.secretKey = System.getenv("huobi.api.secret")
     }
 
     @Test
