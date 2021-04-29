@@ -4,6 +4,7 @@ package cn.kherrisan.honeydome.broker.common
 
 import com.github.jershell.kbson.BigDecimalSerializer
 import kotlinx.serialization.Contextual
+import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
 import org.litote.kmongo.serialization.ZonedDateTimeSerializer
@@ -46,7 +47,7 @@ enum class TradeRole {
 data class Order(
     val exchange: Exchange,
     var oid: String,
-    val coid: String,
+    @SerialName("_id") var coid: String,
     val symbol: Symbol,
     val state: OrderState,
     val side: OrderSide,

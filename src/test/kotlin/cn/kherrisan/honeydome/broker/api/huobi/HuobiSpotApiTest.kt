@@ -153,4 +153,14 @@ internal class HuobiSpotApiTest {
     @Order(11)
     fun limitSell() = runBlocking {
     }
+
+    @Test
+    @Order(12)
+    @ObsoleteCoroutinesApi
+    fun subscribeBalance() = runBlocking {
+        huobiSpotApi.subscribeBalanceUpdate {
+            println(it.second)
+        }
+        delay(20000)
+    }
 }

@@ -10,14 +10,17 @@ import cn.kherrisan.honeydome.broker.ungzip
 import cn.kherrisan.kommons.set
 import cn.kherrisan.kommons.toJson
 import com.google.gson.Gson
+import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
+import com.google.gson.stream.JsonReader
 import io.vertx.core.Promise
 import io.vertx.core.buffer.Buffer
 import io.vertx.ext.web.client.HttpResponse
 import io.vertx.kotlin.coroutines.await
 import kotlinx.coroutines.ObsoleteCoroutinesApi
 import org.slf4j.LoggerFactory
+import java.io.StringReader
 import java.math.BigDecimal
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -41,8 +44,8 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private val logger = LoggerFactory.getLogger(HuobiSpotApi::class.java)
     var accountId: String? = null
-    lateinit var apiKey: String
-    lateinit var secretKey: String
+    var apiKey: String = ""
+    var secretKey: String = ""
 
     @ObsoleteCoroutinesApi
     private fun marketWsFactory() = DefaultWebsocket("wss://api.huobi.pro/ws", handle = { buffer ->
@@ -93,45 +96,67 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     private var authPromise = Promise.promise<Unit>()
 
     @ObsoleteCoroutinesApi
-    private var tradingWs = DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
-        val clear = buffer.bytes.decodeToString()
-        logger.trace(clear)
-        val obj = JsonParser.parseString(clear).asJsonObject
-        when (obj["action"].asString) {
-            "ping" -> {
-                //ping-pong
-                obj["action"] = "pong"
-                sendText(Gson().toJson(obj))
-            }
-            "req" -> {
-                logger.debug(obj.toString())
-                if (obj["ch"].asString == "auth" && obj["code"].asInt == 200) {
-                    authPromise.complete()
+    private val tradingWs by lazy {
+        DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
+            val clear = buffer.bytes.decodeToString()
+            logger.debug(clear)
+            val obj = JsonParser.parseString(clear).asJsonObject
+            when (obj["action"].asString) {
+                "ping" -> {
+                    //ping-pong
+                    obj["action"] = "pong"
+                    sendText(Gson().toJson(obj))
+                }
+                "req" -> {
+                    logger.debug(obj.toString())
+                    if (obj["ch"].asString == "auth" && obj["code"].asInt == 200) {
+                        authPromise.complete()
+                    }
+                }
+                "sub" -> {
+                    logger.debug(obj.toString())
+                }
+                "unsub" -> {
+                }
+                "push" -> {
+                    invokeSubscriptionHandle(clear, obj["ch"].asString)
                 }
             }
-            "sub" -> {
-            }
-            "unsub" -> {
-            }
-            "push" -> {
-                invokeSubscriptionHandle(clear, obj["ch"].asString)
-            }
-        }
-    }, subscriptionHandler = { id ->
-        sendText(
-            mapOf(
-                "action" to "sub",
-                "ch" to id
-            ).toJson()
-        )
-    }, unsubscriptionHandler = {}, authenticationHandler = {
-
-    })
+        }, subscriptionHandler = { id ->
+            authPromise.future().await()
+            sendText(
+                mapOf(
+                    "action" to "sub",
+                    "ch" to id
+                ).toJson()
+            )
+        }, unsubscriptionHandler = { id ->
+            sendText(
+                mapOf(
+                    "action" to "unsub",
+                    "ch" to id
+                ).toJson()
+            )
+        }, authenticationHandler = {
+            authPromise = Promise.promise()
+            val params = mutableMapOf<String, String>()
+            sign("GET", "/ws/v2", params, true)
+            sendText(
+                GsonBuilder().disableHtmlEscaping().create().toJson(
+                    mapOf(
+                        "action" to "req",
+                        "ch" to "auth",
+                        "params" to params
+                    )
+                )
+            )
+        })
+    }
 
     private suspend fun invokeSubscriptionHandle(clear: String, ch: String) {
         try {
             val handle = subscriptionHandleMap[ch]
-            handle?.invoke(ch)
+            handle?.invoke(clear)
         } catch (e: Exception) {
             logger.error(e.message)
             logger.error("Error in dispatch: $clear")
@@ -180,22 +205,48 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             .collect(Collectors.joining("&"))
     }
 
+    private fun sorted(params: Map<String, Any>?): String {
+        if (params == null || params.isEmpty())
+            return ""
+        return params.keys.stream()
+            .map { key -> "$key=${params[key]}" }
+            .sorted()
+            .collect(Collectors.joining("&"))
+    }
+
     private fun sign(
         method: String,
         url: String,
-        params: MutableMap<String, String>
+        params: MutableMap<String, String>,
+        ws: Boolean = false
     ) {
-        params["AccessKeyId"] = apiKey
-        params["SignatureMethod"] = "HmacSHA256"
-        params["SignatureVersion"] = "2"
-        params["Timestamp"] = gmt()
-        val sb = StringBuilder(1024)
-        sb.append(method.toUpperCase()).append('\n')
-            .append("api.huobi.pro").append('\n')
-            .append(url.removePrefix("https://api.huobi.pro")).append('\n')
-            .append(sortedUrlEncode(params))
-        params["Signature"] =
-            Base64.getEncoder().encodeToString(hmacSHA256Signature(sb.toString(), secretKey))
+        if (!ws) {
+            params["AccessKeyId"] = apiKey
+            params["SignatureMethod"] = "HmacSHA256"
+            params["SignatureVersion"] = "2"
+            params["Timestamp"] = gmt()
+            val sb = StringBuilder(1024)
+            sb.append(method.toUpperCase()).append('\n')
+                .append("api.huobi.pro").append('\n')
+                .append(url.removePrefix("https://api.huobi.pro")).append('\n')
+                .append(sortedUrlEncode(params))
+            params["Signature"] =
+                Base64.getEncoder().encodeToString(hmacSHA256Signature(sb.toString(), secretKey))
+        } else {
+            params["accessKey"] = apiKey
+            params["signatureMethod"] = "HmacSHA256"
+            params["signatureVersion"] = "2.1"
+            params["timestamp"] = gmt()
+            val sb = StringBuilder(1024)
+            sb.append(method.toUpperCase()).append('\n')
+                .append("api.huobi.pro").append('\n')
+                .append(url.removePrefix("https://api.huobi.pro")).append('\n')
+                .append(sortedUrlEncode(params))
+            logger.debug("Signature payload:\n$sb")
+            val hash = hmacSHA256Signature(sb.toString(), secretKey)
+            params["signature"] = Base64.getEncoder().encodeToString(hash)
+            params["authType"] = "api"
+        }
     }
 
     suspend fun getAccountId(): String {
@@ -490,13 +541,13 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         if (subscriptionHandleMap.containsKey(id)) {
             return
         }
-        marketWs.subscribe(id)
         subscriptionHandleMap[id] = {
             val tick = JsonParser.parseString(it)["tick"].asJsonObject
             handle(
                 kline(symbol, period, tick)
             )
         }
+        marketWs.subscribe(id)
     }
 
     @ObsoleteCoroutinesApi
@@ -505,6 +556,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         if (!subscriptionHandleMap.containsKey(id)) {
             return
         }
+        subscriptionHandleMap.remove(id)
         marketWs.unsubscribe(id)
     }
 
@@ -514,7 +566,6 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         if (subscriptionHandleMap.containsKey(id)) {
             return
         }
-        marketWs.subscribe(id)
         subscriptionHandleMap[id] = {
             val tick = JsonParser.parseString(it)["tick"].asJsonObject
             handle(
@@ -529,6 +580,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
                 )
             )
         }
+        marketWs.subscribe(id)
     }
 
     @ObsoleteCoroutinesApi
@@ -537,15 +589,37 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         if (!subscriptionHandleMap.containsKey(id)) {
             return
         }
+        subscriptionHandleMap.remove(id)
         marketWs.unsubscribe(id)
     }
 
-    override suspend fun subscribeBalanceUpdate() {
-        TODO("subscribeBalanceUpdate")
+    @ObsoleteCoroutinesApi
+    override suspend fun subscribeBalanceUpdate(handle: suspend (balances: Pair<Currency, Balance>) -> Unit) {
+        val id = "accounts.update#2"
+        if (subscriptionHandleMap.containsKey(id)) {
+            return
+        }
+        subscriptionHandleMap[id] = {
+            val data = JsonParser.parseString(it).asJsonObject["data"].asJsonObject
+            if (data["accountId"].asInt.toString() == accountId && data["accountType"].asString == "trade") {
+                val c = data["currency"].asString
+                if (data.has("available")) {
+                    val available = data["available"].asString.toBigDecimal()
+                    val balance = data["balance"].asString.toBigDecimal()
+                    handle(Pair(c, Balance(balance(available, c), balance(balance - available, c))))
+                }
+            }
+        }
+        tradingWs.subscribe(id)
     }
 
+    @ObsoleteCoroutinesApi
     override suspend fun unsubscribeBalanceUpdate() {
-        TODO("unsubscribeBalanceUpdate")
+        val id = "accounts.update#2"
+        if (!subscriptionHandleMap.containsKey(id)) {
+            return
+        }
+        tradingWs.unsubscribe(id)
     }
 
     override suspend fun subscribeOrderUpdate() {

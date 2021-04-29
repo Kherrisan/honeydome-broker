@@ -53,7 +53,7 @@ interface SpotApi {
     suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String
     suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String
     suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String
-    suspend fun subscribeBalanceUpdate()
+    suspend fun subscribeBalanceUpdate(handle: suspend (balances: Pair<Currency, Balance>) -> Unit)
     suspend fun unsubscribeBalanceUpdate()
     suspend fun subscribeOrderUpdate()
     suspend fun unsubscribeOrderUpdate()
@@ -271,6 +271,7 @@ class DefaultWebsocket(
 
     private suspend fun subscribeAll() {
         subscriptions.forEach {
+            logger.debug("Resubscribe to $it")
             subscriptionHandler(it)
         }
     }
@@ -293,7 +294,7 @@ class DefaultWebsocket(
         connect()
     }
 
-    suspend fun connect() {
+    private suspend fun connect() {
         if (connectionBinaryBackoffBits >= 5) {
             connectionBinaryBackoffBits = 5
         }
@@ -314,6 +315,7 @@ class DefaultWebsocket(
         }
         try {
             ws = awaitResult { vertx.createHttpClient(options).webSocket(port, uri.host, rp, it) }
+            logger.debug("Connected to $uri")
             connectionMutex.set(false)
         } catch (e: Exception) {
             logger.error("${e.message}: $url")
@@ -334,9 +336,11 @@ class DefaultWebsocket(
             }
         }
         connectionBinaryBackoffBits = 1
+        authenticationHandler?.let {
+            logger.debug("authenticate $uri")
+            it.invoke(this)
+        }
         subscribeAll()
-        authenticationHandler?.invoke(this)
-        logger.debug("Connected to $uri")
     }
 
     override fun close() {

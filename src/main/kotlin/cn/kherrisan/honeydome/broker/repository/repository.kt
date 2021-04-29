@@ -89,4 +89,9 @@ object OrderRepository : Repository() {
         return db.getCollection<Order>()
             .findOne(Order::coid eq cid)
     }
+
+    suspend fun queryByOid(oid: String): Order? {
+        return db.getCollection<Order>()
+            .findOne(Order::oid eq oid)
+    }
 }

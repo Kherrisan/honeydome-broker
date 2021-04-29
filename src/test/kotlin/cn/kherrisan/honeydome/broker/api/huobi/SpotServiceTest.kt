@@ -1,13 +1,14 @@
 package cn.kherrisan.honeydome.broker.api.huobi
 
-import cn.kherrisan.honeydome.broker.common.BTC_USDT
-import cn.kherrisan.honeydome.broker.common.HUOBI
-import cn.kherrisan.honeydome.broker.common.KlinePeriod
+import cn.kherrisan.honeydome.broker.common.*
 import cn.kherrisan.honeydome.broker.repository.KlineRepository
 import cn.kherrisan.honeydome.broker.repository.Mongodb
 import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotFirmbargainService
-import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.*
+import kotlinx.coroutines.flow.forEach
+import kotlinx.coroutines.flow.receiveAsFlow
 import org.junit.jupiter.api.*
+import org.junit.jupiter.api.Order
 import java.time.ZonedDateTime
 
 @TestInstance(TestInstance.Lifecycle.PER_CLASS)
@@ -19,6 +20,11 @@ class SpotServiceTest {
     @BeforeAll
     fun setupDB() = runBlocking {
         Mongodb.setup()
+    }
+
+    @BeforeAll
+    fun setupService() = runBlocking {
+        huobiSpotService.setup()
     }
 
     @Test
@@ -40,14 +46,40 @@ class SpotServiceTest {
 
     @Test
     @Order(2)
-    fun getKlines() = runBlocking {
+    @InternalCoroutinesApi
+    fun getKlineChannel() = runBlocking {
+        val end = ZonedDateTime.now()
+        var klineCursor = huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(50), end)
+        var klineOrClosed = klineCursor.receiveOrClosed()
+        var klineList = mutableListOf<Kline>()
+        while (!klineOrClosed.isClosed) {
+            println(klineOrClosed.value)
+            klineList.add(klineOrClosed.value)
+            klineOrClosed = klineCursor.receiveOrClosed()
+        }
+    }
+
+    @Test
+    @Order(3)
+    fun getBalance() = runBlocking {
+        delay(3000)
+        println(huobiSpotService.getBalance())
+        //做一次资金划转
+        delay(10000)
+        println(huobiSpotService.getBalance())
+    }
+
+    @Test
+    @Order(2)
+    fun getKlineChanel() = runBlocking {
 
     }
 
     @AfterAll
     fun cleanDB() {
         runBlocking {
-            Mongodb.db.dropCollection("kline")
+            Mongodb.db.dropCollection<Kline>()
+            Mongodb.db.dropCollection<BalanceSnapshot>()
         }
     }
 }
