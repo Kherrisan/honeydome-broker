@@ -4,77 +4,130 @@ info:
     title: honeydome-broker-web
     description: honeydome-broker web 访问的 openAPI 文档
 servers:
-    - url: localhost
+    - url: http://localhost:7800
       description: local server stub
 paths:
+    /hello:
+        get:
+            description: 测试接口，用于判断 web 是否启动
+            operationId: helloWorld
+            responses:
+                200:
+                    description: 测试接口默认返回结果
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
+                                example: hello world
     /kline:
         get:
             description: 查询K线历史数据
             operationId: getKlines
             parameters:
-                - name: exchange
-                  description: 交易所名称
-                  example: HUOBI
-                  in: query
-                  required: true
-                  schema:
-                      type: string
-                      enum:
-                          - HUOBI
-                          - OKEX
-                          - BINANCE
-                - name: symbol
-                  description: 交易对名称
-                  example: btc/usdt
-                  in: query
-                  required: true
-                  schema:
-                      type: string
-                - name: period
-                  description: 查询的K线的粒度
-                  in: query
-                  required: true
-                  schema:
-                      type: string
-                      enum:
-                          - MINUTE
-                          - QUARTER
-                          - HOUR
-                          - DAY
-                          - WEEK
-                - name: start
-                  description: 查询开始时间
-                  in: query
-                  schema:
-                      type: string
-                      format: 'date-time'
-                - name: end
-                  description: 查询结束时间
-                  in: query
-                  schema:
-                      type: string
-                      format: 'date-time'
-                - name: page
-                  description: 分页查询中，当前页数
-                  in: query
-                  required: true
-                  schema:
-                      type: integer
-                - name: size
-                  description: 分页查询中，当前也中K线数量
-                  in: query
-                  required: true
-                  schema:
-                      type: integer
+                -   name: exchange
+                    description: 交易所名称
+                    example: huobi
+                    in: query
+                    required: true
+                    schema:
+                        $ref: '#/components/schemas/Exchange'
+                -   name: symbol
+                    description: 交易对名称
+                    example: btc/usdt
+                    in: query
+                    required: true
+                    schema:
+                        type: string
+                -   name: period
+                    description: 查询的K线的粒度
+                    in: query
+                    required: true
+                    schema:
+                        type: string
+                        enum:
+                            - MINUTE
+                            - QUARTER
+                            - HOUR
+                            - DAY
+                            - WEEK
+                -   name: start
+                    description: 查询开始时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
+                -   name: end
+                    description: 查询结束时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
             responses:
                 200:
                     description: 返回指定查询范围内的K线数据
                     content:
                         application/json:
                             schema:
-                                $ref: '#/components/schemas/KlineListPage'
+                                $ref: '#/components/schemas/KlineList'
+    /balance:
+        get:
+            description: 查询当前账户余额
+            operationId: queryLatestBalance
+            parameters:
+                -   name: exchange
+                    description: 待查询余额的交易所
+                    in: query
+                    required: true
+                    schema:
+                        $ref: '#/components/schemas/Exchange'
+            responses:
+                200:
+                    description: 返回指定交易所的当前账户余额
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/BalanceSnapshot'
+    /balance/history:
+        get:
+            description: 查询一个时间段内的账户余额变动
+            operationId: queryHistoryBalance
+            parameters:
+                -   name: exchange
+                    description: 待查询的指定交易所
+                    in: query
+                    required: true
+                    schema:
+                        $ref: '#/components/schemas/Exchange'
+                -   name: start
+                    description: 查询开始时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
+                -   name: end
+                    description: 查询结束时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
+            responses:
+                200:
+                    description: 返回一段时间内账户余额快照的列表
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/BalanceSnapshot'
 components:
     schemas:
+        Exchange:
+            description: 交易所名称
+            type: string
+            enum:
+                - huobi
+                - okex
+                - binance
         Page:
             description: 表数据的分页信息
             type: object
@@ -93,30 +146,42 @@ components:
             type: object
             properties:
                 open:
-                    type: string
+                    type: number
                     format: float
                 close:
-                    type: string
+                    type: number
                     format: float
                 high:
-                    type: string
+                    type: number
                     format: float
                 low:
-                    type: string
+                    type: number
                     format: float
                 vol:
-                    type: string
+                    type: number
                     format: float
                 time:
                     type: string
                     format: 'date-time'
-        KlineListPage:
-            description: 分页的K线数据集
+        KlineList:
+            type: array
+            items:
+                $ref: '#/components/schemas/Kline'
+        Balance:
+            description: 单一币种余额
             type: object
             properties:
-                data:
-                    type: array
-                    items:
-                        $ref: '#/components/schemas/Kline'
-                page:
-                    $ref: '#/components/schemas/Page'
+                free:
+                    type: number
+                    format: float
+                frozen:
+                    type: number
+                    format: float
+        BalanceSnapshot:
+            description: 所有币种余额
+            properties:
+                time:
+                    type: string
+                    format: 'date-time'
+            additionalProperties:
+                $ref: '#/components/schemas/Balance'
