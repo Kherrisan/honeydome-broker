@@ -16,7 +16,7 @@ import javax.crypto.spec.SecretKeySpec
 
 fun objSimpleName(obj: Any?): String = "${obj?.javaClass?.simpleName}@${obj.hashCode()}"
 
-fun defaultCoroutineScope(): CoroutineScope = CoroutineScope(VertxHolder.vertx.dispatcher() + SupervisorJob())
+fun defaultCoroutineScope(): CoroutineScope = CoroutineScope(VertxHolder.vertx.dispatcher())
 
 var incrementId = 0
 

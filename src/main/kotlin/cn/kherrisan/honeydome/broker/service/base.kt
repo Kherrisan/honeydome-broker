@@ -5,6 +5,7 @@ import cn.kherrisan.honeydome.broker.api.SpotApi
 import cn.kherrisan.honeydome.broker.common.*
 import cn.kherrisan.honeydome.broker.common.Currency
 import cn.kherrisan.honeydome.broker.coroutineFixedRateTimer
+import cn.kherrisan.honeydome.broker.defaultCoroutineScope
 import cn.kherrisan.honeydome.broker.randomId
 import cn.kherrisan.honeydome.broker.repository.BalanceRepository
 import cn.kherrisan.honeydome.broker.repository.CommonInfoRepository
@@ -38,7 +39,7 @@ interface SpotService {
 }
 
 abstract class AbstractSpotFirmbargainService(private val exchange: Exchange, val api: SpotApi) :
-    SpotService {
+    SpotService, CoroutineScope by defaultCoroutineScope() {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
 
@@ -139,71 +140,54 @@ abstract class AbstractSpotFirmbargainService(private val exchange: Exchange, va
         period: KlinePeriod,
         start: ZonedDateTime,
         end: ZonedDateTime
-    ): ReceiveChannel<Kline> = coroutineScope {
-        produce {
-            val eend = if (end.plusSeconds(period.seconds) >= ZonedDateTime.now()) {
-                end.minusSeconds(period.seconds)
-            } else {
-                end
-            }
-            //先从数据库里查，看缺多少。再从 api 查询缺少的分段
-            val klines = KlineRepository.queryKline(exchange, symbol, period, start, eend).toMutableList()
-            //以 1s 为最小粒度判断 klines 是否连续，是否有空洞
-            val holes = mutableListOf<Pair<ZonedDateTime, ZonedDateTime>>()
-            var cursor = start
-            /**
-             * 举例：
-             * 1   2   3   5   6   9   14  15  16  19  20
-             * 从上述 kline 中查询 start=0,end=22
-             */
-            /**
-             * 举例：
-             * 1   2   3   5   6   9   14  15  16  19  20
-             * 从上述 kline 中查询 start=0,end=22
-             */
-            /**
-             * 举例：
-             * 1   2   3   5   6   9   14  15  16  19  20
-             * 从上述 kline 中查询 start=0,end=22
-             */
-            /**
-             * 举例：
-             * 1   2   3   5   6   9   14  15  16  19  20
-             * 从上述 kline 中查询 start=0,end=22
-             */
-            for (kline in klines) {
-                if (cursor.plusSeconds(period.seconds) <= kline.time) {
-                    holes.add(Pair(cursor, kline.time))
-                }
-                cursor = kline.time.plusSeconds(period.seconds)
-            }
-            if (klines.isEmpty()) {
-                holes.add(Pair(start, eend))
-            } else if (klines.last().time.plusSeconds(period.seconds) < eend) {
-                holes.add(Pair(klines.last().time, eend))
-            }
-            var klineIndex = 0
-            var holeIndex = 0
-            while (klineIndex < klines.size || holeIndex < holes.size) {
-                if (klineIndex >= klines.size) {
-                    val hole = holes[holeIndex++]
-                    fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
-                } else if (holeIndex >= holes.size) {
-                    send(klines[klineIndex++])
-                } else {
-                    val kline = klines[klineIndex]
-                    val hole = holes[holeIndex]
-                    if (kline.time < hole.first) {
-                        send(kline)
-                        klineIndex++
-                    } else {
-                        fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
-                        holeIndex++
-                    }
-                }
-            }
-            close()
+    ): ReceiveChannel<Kline> = produce {
+        val eend = if (end.plusSeconds(period.seconds) >= ZonedDateTime.now()) {
+            end.minusSeconds(period.seconds)
+        } else {
+            end
         }
+        //先从数据库里查，看缺多少。再从 api 查询缺少的分段
+        val klines = KlineRepository.queryKline(exchange, symbol, period, start, eend).toMutableList()
+        //以 1s 为最小粒度判断 klines 是否连续，是否有空洞
+        val holes = mutableListOf<Pair<ZonedDateTime, ZonedDateTime>>()
+        var cursor = start
+        /**
+         * 举例：
+         * 1   2   3   5   6   9   14  15  16  19  20
+         * 从上述 kline 中查询 start=0,end=22
+         */
+        for (kline in klines) {
+            if (cursor.plusSeconds(period.seconds) <= kline.time) {
+                holes.add(Pair(cursor, kline.time))
+            }
+            cursor = kline.time.plusSeconds(period.seconds)
+        }
+        if (klines.isEmpty()) {
+            holes.add(Pair(start, eend))
+        } else if (klines.last().time.plusSeconds(period.seconds) < eend) {
+            holes.add(Pair(klines.last().time, eend))
+        }
+        var klineIndex = 0
+        var holeIndex = 0
+        while (klineIndex < klines.size || holeIndex < holes.size) {
+            if (klineIndex >= klines.size) {
+                val hole = holes[holeIndex++]
+                fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
+            } else if (holeIndex >= holes.size) {
+                send(klines[klineIndex++])
+            } else {
+                val kline = klines[klineIndex]
+                val hole = holes[holeIndex]
+                if (kline.time < hole.first) {
+                    send(kline)
+                    klineIndex++
+                } else {
+                    fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
+                    holeIndex++
+                }
+            }
+        }
+        close()
     }
 
     private suspend fun fetchAndSaveKlineHole(

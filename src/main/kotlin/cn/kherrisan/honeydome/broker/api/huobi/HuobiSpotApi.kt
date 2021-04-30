@@ -13,14 +13,12 @@ import com.google.gson.Gson
 import com.google.gson.GsonBuilder
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
-import com.google.gson.stream.JsonReader
 import io.vertx.core.Promise
 import io.vertx.core.buffer.Buffer
 import io.vertx.ext.web.client.HttpResponse
 import io.vertx.kotlin.coroutines.await
 import kotlinx.coroutines.ObsoleteCoroutinesApi
 import org.slf4j.LoggerFactory
-import java.io.StringReader
 import java.math.BigDecimal
 import java.net.URLEncoder
 import java.nio.charset.StandardCharsets
@@ -29,15 +27,7 @@ import java.time.ZoneId
 import java.time.ZonedDateTime
 import java.util.*
 import java.util.stream.Collectors
-import kotlin.collections.List
-import kotlin.collections.Map
-import kotlin.collections.forEach
-import kotlin.collections.map
-import kotlin.collections.mapOf
-import kotlin.collections.mutableMapOf
 import kotlin.collections.set
-import kotlin.collections.sorted
-import kotlin.collections.sortedBy
 import kotlin.math.min
 
 class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
@@ -50,7 +40,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     @ObsoleteCoroutinesApi
     private fun marketWsFactory() = DefaultWebsocket("wss://api.huobi.pro/ws", handle = { buffer ->
         val decoded = ungzip(buffer.bytes)
-        logger.trace(decoded)
+        logger.debug(decoded)
         val obj = JsonParser.parseString(decoded).asJsonObject
         when {
             obj.has("ping") -> {
@@ -205,15 +195,6 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             .collect(Collectors.joining("&"))
     }
 
-    private fun sorted(params: Map<String, Any>?): String {
-        if (params == null || params.isEmpty())
-            return ""
-        return params.keys.stream()
-            .map { key -> "$key=${params[key]}" }
-            .sorted()
-            .collect(Collectors.joining("&"))
-    }
-
     private fun sign(
         method: String,
         url: String,
@@ -325,8 +306,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             }
             promise.complete(klines)
         }
-        future.await()
-        return future.result()
+        return future.await()
     }
 
     override suspend fun getSymbolDecimalInfo(): Map<Symbol, SymbolDecimalInfo> {
