@@ -5,10 +5,7 @@ import com.google.gson.Gson
 import com.mongodb.MongoBulkWriteException
 import com.mongodb.client.model.BulkWriteOptions
 import com.mongodb.client.model.IndexOptions
-import org.litote.kmongo.eq
-import org.litote.kmongo.gte
-import org.litote.kmongo.insertOne
-import org.litote.kmongo.lt
+import org.litote.kmongo.*
 import java.time.ZonedDateTime
 
 object CommonInfoRepository : Repository() {
@@ -74,8 +71,21 @@ object KlineRepository : Repository() {
 object BalanceRepository : Repository() {
     suspend fun save(snapshot: BalanceSnapshot) {
         db.getCollection<BalanceSnapshot>()
-            .save(snapshot)
+            .save(snapshot.ignoreZeroBalance())
     }
+
+    suspend fun queryByExchangeAndDatetimeRange(
+        exchange: Exchange,
+        start: ZonedDateTime,
+        end: ZonedDateTime
+    ): List<BalanceSnapshot> =
+        db.getCollection<BalanceSnapshot>()
+            .find(
+                BalanceSnapshot::exchange eq exchange,
+                BalanceSnapshot::time gte start,
+                BalanceSnapshot::time lte end
+            )
+            .toList()
 }
 
 object OrderRepository : Repository() {

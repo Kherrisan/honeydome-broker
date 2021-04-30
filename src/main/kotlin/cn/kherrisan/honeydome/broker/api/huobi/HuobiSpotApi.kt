@@ -40,7 +40,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     @ObsoleteCoroutinesApi
     private fun marketWsFactory() = DefaultWebsocket("wss://api.huobi.pro/ws", handle = { buffer ->
         val decoded = ungzip(buffer.bytes)
-        logger.debug(decoded)
+        logger.trace(decoded)
         val obj = JsonParser.parseString(decoded).asJsonObject
         when {
             obj.has("ping") -> {
@@ -81,7 +81,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     private val subscriptionHandleMap = mutableMapOf<String, suspend (String) -> Unit>()
 
     @ObsoleteCoroutinesApi
-    val marketWs = BalanceLoaderWebsocket(this::marketWsFactory)
+    val marketWs by lazy { BalanceLoaderWebsocket(this::marketWsFactory) }
 
     private var authPromise = Promise.promise<Unit>()
 
@@ -89,7 +89,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     private val tradingWs by lazy {
         DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
             val clear = buffer.bytes.decodeToString()
-            logger.debug(clear)
+            logger.trace(clear)
             val obj = JsonParser.parseString(clear).asJsonObject
             when (obj["action"].asString) {
                 "ping" -> {

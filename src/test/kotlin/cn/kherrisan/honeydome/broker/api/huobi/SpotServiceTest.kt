@@ -3,11 +3,9 @@ package cn.kherrisan.honeydome.broker.api.huobi
 import cn.kherrisan.honeydome.broker.common.*
 import cn.kherrisan.honeydome.broker.repository.KlineRepository
 import cn.kherrisan.honeydome.broker.repository.Mongodb
-import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotFirmbargainService
+import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.flow.forEach
-import kotlinx.coroutines.flow.receiveAsFlow
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Order
 import java.time.ZonedDateTime
@@ -16,7 +14,7 @@ import java.time.ZonedDateTime
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class SpotServiceTest {
 
-    private val huobiSpotService = HuobiSpotFirmbargainService()
+    private val huobiSpotService = HuobiSpotService()
 
     @BeforeAll
     fun setupDB() = runBlocking {

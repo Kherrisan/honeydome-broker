@@ -11,6 +11,7 @@ import cn.kherrisan.honeydome.broker.repository.BalanceRepository
 import cn.kherrisan.honeydome.broker.repository.CommonInfoRepository
 import cn.kherrisan.honeydome.broker.repository.KlineRepository
 import cn.kherrisan.honeydome.broker.repository.OrderRepository
+import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
@@ -18,6 +19,26 @@ import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.time.ZonedDateTime
 import java.util.*
+
+fun Exchange.spot(): SpotService = Service[this]
+
+object Service {
+
+    private val map: MutableMap<Exchange, SpotService> = mutableMapOf()
+
+    operator fun get(exchange: Exchange): SpotService {
+        return map[exchange] ?: error("Invalid exchange name: $exchange")
+    }
+
+    suspend fun setup() {
+        coroutineScope {
+            coroutineScope {
+                launch { map[HUOBI] = HuobiSpotService() }
+            }
+            map.values.forEach { launch { (it as AbstractSpotService).setup() } }
+        }
+    }
+}
 
 interface SpotService {
     suspend fun getKline(symbol: Symbol, period: KlinePeriod, start: ZonedDateTime, end: ZonedDateTime): List<Kline>
@@ -38,7 +59,7 @@ interface SpotService {
     suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String
 }
 
-abstract class AbstractSpotFirmbargainService(private val exchange: Exchange, val api: SpotApi) :
+abstract class AbstractSpotService(private val exchange: Exchange, val api: SpotApi) :
     SpotService, CoroutineScope by defaultCoroutineScope() {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
@@ -140,55 +161,56 @@ abstract class AbstractSpotFirmbargainService(private val exchange: Exchange, va
         period: KlinePeriod,
         start: ZonedDateTime,
         end: ZonedDateTime
-    ): ReceiveChannel<Kline> = produce {
-        val eend = if (end.plusSeconds(period.seconds) >= ZonedDateTime.now()) {
-            end.minusSeconds(period.seconds)
-        } else {
-            end
-        }
-        //先从数据库里查，看缺多少。再从 api 查询缺少的分段
-        val klines = KlineRepository.queryKline(exchange, symbol, period, start, eend).toMutableList()
-        //以 1s 为最小粒度判断 klines 是否连续，是否有空洞
-        val holes = mutableListOf<Pair<ZonedDateTime, ZonedDateTime>>()
-        var cursor = start
-        /**
-         * 举例：
-         * 1   2   3   5   6   9   14  15  16  19  20
-         * 从上述 kline 中查询 start=0,end=22
-         */
-        for (kline in klines) {
-            if (cursor.plusSeconds(period.seconds) <= kline.time) {
-                holes.add(Pair(cursor, kline.time))
-            }
-            cursor = kline.time.plusSeconds(period.seconds)
-        }
-        if (klines.isEmpty()) {
-            holes.add(Pair(start, eend))
-        } else if (klines.last().time.plusSeconds(period.seconds) < eend) {
-            holes.add(Pair(klines.last().time, eend))
-        }
-        var klineIndex = 0
-        var holeIndex = 0
-        while (klineIndex < klines.size || holeIndex < holes.size) {
-            if (klineIndex >= klines.size) {
-                val hole = holes[holeIndex++]
-                fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
-            } else if (holeIndex >= holes.size) {
-                send(klines[klineIndex++])
+    ): ReceiveChannel<Kline> =
+        produce {
+            val eend = if (end.plusSeconds(period.seconds) >= ZonedDateTime.now()) {
+                end.minusSeconds(period.seconds)
             } else {
-                val kline = klines[klineIndex]
-                val hole = holes[holeIndex]
-                if (kline.time < hole.first) {
-                    send(kline)
-                    klineIndex++
-                } else {
+                end
+            }
+            //先从数据库里查，看缺多少。再从 api 查询缺少的分段
+            val klines = KlineRepository.queryKline(exchange, symbol, period, start, eend).toMutableList()
+            //以 1s 为最小粒度判断 klines 是否连续，是否有空洞
+            val holes = mutableListOf<Pair<ZonedDateTime, ZonedDateTime>>()
+            var cursor = start
+            /**
+             * 举例：
+             * 1   2   3   5   6   9   14  15  16  19  20
+             * 从上述 kline 中查询 start=0,end=22
+             */
+            for (kline in klines) {
+                if (cursor.plusSeconds(period.seconds) <= kline.time) {
+                    holes.add(Pair(cursor, kline.time))
+                }
+                cursor = kline.time.plusSeconds(period.seconds)
+            }
+            if (klines.isEmpty()) {
+                holes.add(Pair(start, eend))
+            } else if (klines.last().time.plusSeconds(period.seconds) < eend) {
+                holes.add(Pair(klines.last().time, eend))
+            }
+            var klineIndex = 0
+            var holeIndex = 0
+            while (klineIndex < klines.size || holeIndex < holes.size) {
+                if (klineIndex >= klines.size) {
+                    val hole = holes[holeIndex++]
                     fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
-                    holeIndex++
+                } else if (holeIndex >= holes.size) {
+                    send(klines[klineIndex++])
+                } else {
+                    val kline = klines[klineIndex]
+                    val hole = holes[holeIndex]
+                    if (kline.time < hole.first) {
+                        send(kline)
+                        klineIndex++
+                    } else {
+                        fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
+                        holeIndex++
+                    }
                 }
             }
+            close()
         }
-        close()
-    }
 
     private suspend fun fetchAndSaveKlineHole(
         symbol: Symbol,
@@ -226,10 +248,9 @@ abstract class AbstractSpotFirmbargainService(private val exchange: Exchange, va
             logger.error("尚未登录，无法获取账户余额。")
             return emptyMap()
         }
-        val balances = api.getBalance()
-        val snapshot = BalanceSnapshot(exchange, ZonedDateTime.now(), balances)
+        val snapshot = BalanceSnapshot(exchange, ZonedDateTime.now(), balanceMap)
         BalanceRepository.save(snapshot)
-        return balances
+        return balanceMap
     }
 
     override suspend fun getOrder(cid: String): Order {

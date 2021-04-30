@@ -23,7 +23,6 @@ repositories {
 
 application {
     mainClass.set("cn.kherrisan.honeydome.broker.MainKt")
-//    mainClassName = "cn.kherrisan.honeydome.broker.MainKt"
 }
 
 val vertxVersion = "4.0.3"
