@@ -5,6 +5,7 @@ import cn.kherrisan.honeydome.broker.repository.KlineRepository
 import cn.kherrisan.honeydome.broker.repository.Mongodb
 import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotFirmbargainService
 import kotlinx.coroutines.*
+import kotlinx.coroutines.channels.consumeEach
 import kotlinx.coroutines.flow.forEach
 import kotlinx.coroutines.flow.receiveAsFlow
 import org.junit.jupiter.api.*
@@ -49,14 +50,26 @@ class SpotServiceTest {
     @InternalCoroutinesApi
     fun getKlineChannel() = runBlocking {
         val end = ZonedDateTime.now()
-        var klineCursor = huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(50), end)
-        var klineOrClosed = klineCursor.receiveOrClosed()
         var klineList = mutableListOf<Kline>()
-        while (!klineOrClosed.isClosed) {
-            println(klineOrClosed.value)
-            klineList.add(klineOrClosed.value)
-            klineOrClosed = klineCursor.receiveOrClosed()
+        huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(50), end).consumeEach {
+            println(it)
+            klineList.add(it)
         }
+        println(klineList.size)
+        klineList.clear()
+        delay(3000)
+        huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(100), end.minusDays(40)).consumeEach {
+            println(it)
+            klineList.add(it)
+        }
+        println(klineList.size)
+        klineList.clear()
+        delay(3000)
+        huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(400), end.minusDays(20)).consumeEach {
+            println(it)
+            klineList.add(it)
+        }
+        println(klineList.size)
     }
 
     @Test
@@ -67,12 +80,6 @@ class SpotServiceTest {
         //做一次资金划转
         delay(10000)
         println(huobiSpotService.getBalance())
-    }
-
-    @Test
-    @Order(2)
-    fun getKlineChanel() = runBlocking {
-
     }
 
     @AfterAll
