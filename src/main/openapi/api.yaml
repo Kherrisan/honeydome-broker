@@ -1,0 +1,454 @@
+openapi: "3.0.0"
+info:
+    version: "1.0.0"
+    title: honeydome-broker-web
+    description: honeydome-broker web 访问的 openAPI 文档
+servers:
+    - url: localhost
+      description: local server stub
+tags:
+    - name: config
+      description: 配置项相关操作
+    - name: strategy
+    - name: process
+    - name: data
+paths:
+    /tap:
+        get:
+            description: 空请求
+            operationId: tap
+            responses:
+                200:
+                    description: 请求成功
+    /config:
+        get:
+            summary: 查询配置项列表
+            operationId: getConfigList
+            tags:
+                - config
+            parameters:
+                - name: page
+                  in: query
+                  required: true
+                  schema:
+                      type: integer
+                - name: size
+                  in: query
+                  required: true
+                  schema:
+                      type: integer
+            responses:
+                200:
+                    description: 所有配置项列表
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ConfigListPage'
+        post:
+            summary: 添加或者修改指定配置项
+            operationId: upsertConfig
+            tags:
+                - config
+            parameters:
+                - name: key
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+                - name: value
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                200:
+                    description: 添加或者修改配置项成功，返回修改后的配置项
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Config'
+                404:
+                    description: 找不到指定的配置项
+        delete:
+            summary: 删除指定配置项
+            operationId: deleteConfig
+            tags:
+                - config
+            parameters:
+                - name: key
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                200:
+                    description: 删除指定配置项成功
+                404:
+                    description: 找不到指定配置项
+    /strategy:
+        get:
+            summary: 查询策略列表
+            operationId: getStrategyList
+            tags:
+                - strategy
+            responses:
+                200:
+                    description: 所有策略的列表
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    type: string
+    '/strategy/{name}':
+        get:
+            summary: 查询指定策略的详细信息
+            operationId: getStrategyDetail
+            tags:
+                - strategy
+            parameters:
+                - name: name
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                200:
+                    description: 指定策略的详细信息
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    name:
+                                        type: string
+                                    process:
+                                        type: array
+                                        items:
+                                            $ref: '#/components/schemas/Process'
+                404:
+                    description: 查不到指定的策略
+    /process:
+        get:
+            summary: 查询进程的列表
+            operationId: getProcessList
+            tags:
+                - process
+            parameters:
+                - name: status
+                  in: query
+                  schema:
+                      type: string
+                      enum:
+                          - RUNNING
+                          - FINISHED
+                - name: strategy
+                  in: query
+                  schema:
+                      type: string
+                - name: minEarningRate
+                  in: query
+                  schema:
+                      type: string
+                      format: float
+                - name: maxRetracementRate
+                  in: query
+                  schema:
+                      type: string
+                      format: float
+                - name: page
+                  in: query
+                  required: true
+                  schema:
+                      type: integer
+                - name: size
+                  in: query
+                  required: true
+                  schema:
+                      type: integer
+            responses:
+                200:
+                    description: 指定范围进程的列表
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProcessList'
+        post:
+            summary: 创建新的进程
+            operationId: createNewProcess
+            tags:
+                - process
+            requestBody:
+                required: true
+                content:
+                    application/json:
+                        schema:
+                            $ref: '#/components/schemas/ProcessRequest'
+            responses:
+                200:
+                    description: 创建新的进程成功，并返回新进程的概要信息
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Process'
+    '/process/{pid}':
+        get:
+            summary: 查询指定进程的详情
+            operationId: getProcessDetail
+            tags:
+                - process
+            parameters:
+                - name: pid
+                  in: path
+                  description: 该进程的 pid
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                200:
+                    description: 指定进程的详情
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProcessDetail'
+                404:
+                    description: 找不到进程
+        delete:
+            summary: 停止指定进程
+            operationId: stopProcess
+            tags:
+                - process
+            parameters:
+                - name: pid
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                200:
+                    description: 停止指定进程成功，并返回进程列表
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/ProcessList'
+    /kline:
+        get:
+            description: 查询K线历史数据
+            operationId: getKlines
+            tags:
+                - data
+            parameters:
+                - name: exchange
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+                - name: symbol
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+                - name: period
+                  in: query
+                  required: true
+                  schema:
+                      type: string
+                      enum:
+                          - MINUTE
+                          - HOUR
+                          - DAY
+                          - WEEK
+                - name: start
+                  in: query
+                  schema:
+                      type: string
+                      format: 'date-time'
+                - name: end
+                  in: query
+                  schema:
+                      type: string
+                      format: 'date-time'
+                - name: page
+                  in: query
+                  required: true
+                  schema:
+                      type: integer
+                - name: size
+                  in: query
+                  required: true
+                  schema:
+                      type: integer
+            responses:
+                200:
+                    description: 返回指定查询范围内的K线数据
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/KlineListPage'
+components:
+    schemas:
+        Pageable:
+            description: 分页查询请求
+            type: object
+            properties:
+                page:
+                    type: integer
+                    default: 1
+                size:
+                    type: integer
+                    default: 10
+        Page:
+            description: 表数据的分页信息
+            type: object
+            properties:
+                totalElements:
+                    type: integer
+                    default: 100
+                totalPages:
+                    type: integer
+                    default: 10
+                size:
+                    type: integer
+                    default: 10
+        Config:
+            description: 配置项
+            type: object
+            properties:
+                key:
+                    type: string
+                value:
+                    type: string
+                updateTime:
+                    type: string
+                    format: 'date-time'
+        ConfigListPage:
+            type: object
+            properties:
+                data:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Config'
+                page:
+                    $ref: '#/components/schemas/Page'
+        ProcessType:
+            description: 进程的类型，实盘还是回测
+            type: string
+            enum:
+                - FIRMBARGAIN
+                - BACKTEST
+        Arg:
+            type: object
+            description: 用字符串键值对表示的单个参数项
+            properties:
+                key:
+                    type: string
+                    description: 字符串表示的键
+                value:
+                    type: string
+                    description: 用字符串表示的值
+        Args:
+            description: 用字符串键值对表示的参数列表
+            type: array
+            items:
+                $ref: '#/components/schemas/Arg'
+        ProcessRequest:
+            type: object
+            properties:
+                name:
+                    type: string
+                type:
+                    $ref: '#/components/schemas/ProcessType'
+                args:
+                    type: object
+                    additionalProperties:
+                        type: string
+        Process:
+            type: object
+            properties:
+                pid:
+                    description: 进程的id
+                    type: string
+                name:
+                    description: 进程所实例化的策略名
+                    type: string
+                type:
+                    $ref: '#/components/schemas/ProcessType'
+                launchTime:
+                    description: 进程的启动时间
+                    type: string
+                    format: 'date-time'
+                terminateTime:
+                    description: 进程的终结时间
+                    type: string
+                    format: 'date-time'
+                earningsRate:
+                    description: 收益率
+                    type: string
+                    format: float
+                retracementRate:
+                    description: 回撤率
+                    type: string
+                    format: float
+                args:
+                    type: object
+                    additionalProperties:
+                        type: string
+        ProcessList:
+            type: array
+            items:
+                $ref: '#/components/schemas/Process'
+        ProcessDetail:
+            type: object
+            properties:
+                pid:
+                    type: string
+                name:
+                    type: string
+                launchTime:
+                    type: string
+                    format: 'date-time'
+                startTime:
+                    type: string
+                    format: 'date-time'
+                endTime:
+                    type: string
+                    format: 'date-time'
+                stopTime:
+                    type: string
+                    format: 'date-time'
+                type:
+                    $ref: '#/components/schemas/ProcessType'
+                enginePort:
+                    type: integer
+                strategyPort:
+                    type: integer
+        Kline:
+            type: object
+            properties:
+                open:
+                    type: string
+                    format: float
+                close:
+                    type: string
+                    format: float
+                high:
+                    type: string
+                    format: float
+                low:
+                    type: string
+                    format: float
+                vol:
+                    type: string
+                    format: float
+                time:
+                    type: string
+                    format: 'date-time'
+        KlineListPage:
+            type: object
+            properties:
+                data:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/Kline'
+                page:
+                    $ref: '#/components/schemas/Page'
