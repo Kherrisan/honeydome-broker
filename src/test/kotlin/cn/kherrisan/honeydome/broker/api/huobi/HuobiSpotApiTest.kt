@@ -41,7 +41,7 @@ internal class HuobiSpotApiTest {
         assert(symbols.contains("btc/usdt"))
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     @Test
     @Order(3)
     fun getKlines() = runBlocking {
@@ -61,7 +61,7 @@ internal class HuobiSpotApiTest {
         assert(BTC_USDT in sdi)
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     @Test
     fun subscribeAndUnsubscribeKline() = runBlocking {
         huobiSpotApi.subscribeKline(BTC_USDT, KlinePeriod.DAY) {
@@ -72,7 +72,7 @@ internal class HuobiSpotApiTest {
         delay(2000)
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     @Test
     fun subscribeLoadBalancer() = runBlocking {
         huobiSpotApi.marketWs.SUBCSRIPTIONS_THRESHOLD = 2
@@ -94,7 +94,7 @@ internal class HuobiSpotApiTest {
         delay(2000)
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     @Test
     fun reconnectSubscribeAfterOffline() = runBlocking {
         huobiSpotApi.subscribeKline("btc/usdt", KlinePeriod.DAY) {
@@ -156,7 +156,7 @@ internal class HuobiSpotApiTest {
 
     @Test
     @Order(12)
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     fun subscribeBalance() = runBlocking {
         huobiSpotApi.subscribeBalanceUpdate {
             println(it.second)

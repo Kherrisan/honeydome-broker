@@ -1,4 +1,5 @@
-@file:UseSerializers(ZonedDateTimeSerializer::class,BigDecimalSerializer::class)
+@file:UseSerializers(ZonedDateTimeSerializer::class, BigDecimalSerializer::class)
+
 package cn.kherrisan.honeydome.broker.common
 
 import com.github.jershell.kbson.BigDecimalSerializer
@@ -7,7 +8,7 @@ import kotlinx.serialization.UseSerializers
 import org.litote.kmongo.serialization.ZonedDateTimeSerializer
 import java.math.BigDecimal
 import java.time.ZonedDateTime
-
+import kotlin.math.ceil
 
 @Serializable
 data class Kline(
@@ -40,3 +41,6 @@ enum class KlinePeriod {
             }
         }
 }
+
+fun countKline(period: KlinePeriod, start: ZonedDateTime, end: ZonedDateTime): Int =
+    ((end.toEpochSecond() - start.toEpochSecond()) / period.seconds).toInt()

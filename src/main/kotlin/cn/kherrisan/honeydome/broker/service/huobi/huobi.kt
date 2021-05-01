@@ -5,6 +5,7 @@ import cn.kherrisan.honeydome.broker.api.huobi.HuobiSpotApi
 import cn.kherrisan.honeydome.broker.common.HUOBI
 import cn.kherrisan.honeydome.broker.service.AbstractSpotService
 import cn.kherrisan.kommons.get
+import kotlinx.coroutines.CoroutineScope
 
 class HuobiSpotService : AbstractSpotService(HUOBI, HuobiSpotApi()) {
     override val klineRequestLimit: Int

@@ -19,6 +19,7 @@ import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.time.ZonedDateTime
 import java.util.*
+import kotlin.math.ceil
 
 fun Exchange.spot(): SpotService = Service[this]
 
@@ -31,10 +32,8 @@ object Service {
     }
 
     suspend fun setup() {
+        map[HUOBI] = HuobiSpotService()
         coroutineScope {
-            coroutineScope {
-                launch { map[HUOBI] = HuobiSpotService() }
-            }
             map.values.forEach { launch { (it as AbstractSpotService).setup() } }
         }
     }
@@ -60,7 +59,7 @@ interface SpotService {
 }
 
 abstract class AbstractSpotService(private val exchange: Exchange, val api: SpotApi) :
-    SpotService, CoroutineScope by defaultCoroutineScope() {
+    SpotService {
 
     private val logger = LoggerFactory.getLogger(this::class.java)
 
@@ -73,8 +72,14 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
     private val balanceMap = mutableMapOf<Currency, Balance>()
 
     open suspend fun setup() {
-        setupCommonInfo()
-        setupBalance()
+        logger.debug("Setup ${this::class.simpleName}")
+        coroutineScope {
+            launch { setupCommonInfo() }
+            launch {
+                api.setup()
+                setupBalance()
+            }
+        }
     }
 
     private suspend fun setupBalance() {
@@ -123,21 +128,17 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
         start: ZonedDateTime,
         end: ZonedDateTime
     ): List<Kline> {
-        val eend = if (end.plusSeconds(period.seconds) >= ZonedDateTime.now()) {
+        val readEnd = if (end.plusSeconds(period.seconds) >= ZonedDateTime.now()) {
             end.minusSeconds(period.seconds)
         } else {
             end
         }
+        //包含start，不包含end
         //先从数据库里查，看缺多少。再从 api 查询缺少的分段
-        val klines = KlineRepository.queryKline(exchange, symbol, period, start, eend).toMutableList()
+        val klines = KlineRepository.queryKline(exchange, symbol, period, start, readEnd).toMutableList()
         //以 1s 为最小粒度判断 klines 是否连续，是否有空洞
         val holes = mutableListOf<Pair<ZonedDateTime, ZonedDateTime>>()
         var cursor = start
-        /**
-         * 举例：
-         * 1   2   3   5   6   9   14  15  16  19  20
-         * 从上述 kline 中查询 start=0,end=22
-         */
         for (kline in klines) {
             if (cursor.plusSeconds(period.seconds) <= kline.time) {
                 holes.add(Pair(cursor, kline.time))
@@ -145,14 +146,16 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
             cursor = kline.time.plusSeconds(period.seconds)
         }
         if (klines.isEmpty()) {
-            holes.add(Pair(start, eend))
-        } else if (klines.last().time.plusSeconds(period.seconds) < eend) {
-            holes.add(Pair(klines.last().time, eend))
+            //如果db里一无所有
+            holes.add(Pair(start, readEnd))
+        } else if (klines.last().time.plusSeconds(period.seconds) < readEnd) {
+            //如果klines尾部连续缺失
+            holes.add(Pair(klines.last().time, readEnd))
         }
         for (hole in holes) {
-            fetchAndSaveKlineHole(symbol, period, eend, hole) {}
+            fetchAndSaveKlineHole(symbol, period, readEnd, hole) {}
         }
-        return KlineRepository.queryKline(exchange, symbol, period, start, eend).toMutableList()
+        return KlineRepository.queryKline(exchange, symbol, period, start, readEnd).toMutableList()
     }
 
     @ExperimentalCoroutinesApi
@@ -161,56 +164,50 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
         period: KlinePeriod,
         start: ZonedDateTime,
         end: ZonedDateTime
-    ): ReceiveChannel<Kline> =
-        produce {
-            val eend = if (end.plusSeconds(period.seconds) >= ZonedDateTime.now()) {
-                end.minusSeconds(period.seconds)
-            } else {
-                end
-            }
-            //先从数据库里查，看缺多少。再从 api 查询缺少的分段
-            val klines = KlineRepository.queryKline(exchange, symbol, period, start, eend).toMutableList()
-            //以 1s 为最小粒度判断 klines 是否连续，是否有空洞
-            val holes = mutableListOf<Pair<ZonedDateTime, ZonedDateTime>>()
-            var cursor = start
-            /**
-             * 举例：
-             * 1   2   3   5   6   9   14  15  16  19  20
-             * 从上述 kline 中查询 start=0,end=22
-             */
-            for (kline in klines) {
-                if (cursor.plusSeconds(period.seconds) <= kline.time) {
-                    holes.add(Pair(cursor, kline.time))
-                }
-                cursor = kline.time.plusSeconds(period.seconds)
-            }
-            if (klines.isEmpty()) {
-                holes.add(Pair(start, eend))
-            } else if (klines.last().time.plusSeconds(period.seconds) < eend) {
-                holes.add(Pair(klines.last().time, eend))
-            }
-            var klineIndex = 0
-            var holeIndex = 0
-            while (klineIndex < klines.size || holeIndex < holes.size) {
-                if (klineIndex >= klines.size) {
-                    val hole = holes[holeIndex++]
-                    fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
-                } else if (holeIndex >= holes.size) {
-                    send(klines[klineIndex++])
-                } else {
-                    val kline = klines[klineIndex]
-                    val hole = holes[holeIndex]
-                    if (kline.time < hole.first) {
-                        send(kline)
-                        klineIndex++
-                    } else {
-                        fetchAndSaveKlineHole(symbol, period, eend, hole) { send(it) }
-                        holeIndex++
-                    }
-                }
-            }
-            close()
+    ): ReceiveChannel<Kline> = defaultCoroutineScope().produce {
+        val realEnd = if (end.plusSeconds(period.seconds) > ZonedDateTime.now()) {
+            end.minusSeconds(period.seconds)
+        } else {
+            end
         }
+        //先从数据库里查，看缺多少。再从 api 查询缺少的分段
+        val klines = KlineRepository.queryKline(exchange, symbol, period, start, realEnd).toMutableList()
+        //以 1s 为最小粒度判断 klines 是否连续，是否有空洞
+        val holes = mutableListOf<Pair<ZonedDateTime, ZonedDateTime>>()
+        var cursor = start
+        for (kline in klines) {
+            if (cursor.plusSeconds(period.seconds) <= kline.time) {
+                holes.add(Pair(cursor, kline.time))
+            }
+            cursor = kline.time.plusSeconds(period.seconds)
+        }
+        if (klines.isEmpty()) {
+            holes.add(Pair(start, realEnd))
+        } else if (klines.last().time.plusSeconds(period.seconds) < realEnd) {
+            holes.add(Pair(klines.last().time, realEnd))
+        }
+        var klineIndex = 0
+        var holeIndex = 0
+        while (klineIndex < klines.size || holeIndex < holes.size) {
+            if (klineIndex >= klines.size) {
+                val hole = holes[holeIndex++]
+                fetchAndSaveKlineHole(symbol, period, realEnd, hole) { send(it) }
+            } else if (holeIndex >= holes.size) {
+                send(klines[klineIndex++])
+            } else {
+                val kline = klines[klineIndex]
+                val hole = holes[holeIndex]
+                if (kline.time < hole.first) {
+                    send(kline)
+                    klineIndex++
+                } else {
+                    fetchAndSaveKlineHole(symbol, period, realEnd, hole) { send(it) }
+                    holeIndex++
+                }
+            }
+        }
+        close()
+    }
 
     private suspend fun fetchAndSaveKlineHole(
         symbol: Symbol,
@@ -220,8 +217,8 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
         klineHandle: suspend (Kline) -> Unit
     ) {
         val periodCount =
-            (hole.second.toInstant().epochSecond - hole.first.toInstant().epochSecond) / period.seconds
-        for (s in 0 until periodCount step klineRequestLimit.toLong()) {
+            ((hole.second.toInstant().epochSecond - hole.first.toInstant().epochSecond) / period.seconds).toInt()
+        for (s in 0 until periodCount step klineRequestLimit) {
             val start = hole.first.plusSeconds(s * period.seconds)
             val end = minOf(
                 hole.first.plusSeconds((s + klineRequestLimit) * period.seconds),
@@ -248,8 +245,6 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
             logger.error("尚未登录，无法获取账户余额。")
             return emptyMap()
         }
-        val snapshot = BalanceSnapshot(exchange, ZonedDateTime.now(), balanceMap)
-        BalanceRepository.save(snapshot)
         return balanceMap
     }
 

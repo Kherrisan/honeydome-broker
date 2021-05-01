@@ -17,7 +17,7 @@ import io.vertx.core.Promise
 import io.vertx.core.buffer.Buffer
 import io.vertx.ext.web.client.HttpResponse
 import io.vertx.kotlin.coroutines.await
-import kotlinx.coroutines.ObsoleteCoroutinesApi
+import kotlinx.coroutines.*
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.net.URLEncoder
@@ -37,7 +37,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     var apiKey: String = ""
     var secretKey: String = ""
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     private fun marketWsFactory() = DefaultWebsocket("wss://api.huobi.pro/ws", handle = { buffer ->
         val decoded = ungzip(buffer.bytes)
         logger.trace(decoded)
@@ -80,76 +80,74 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private val subscriptionHandleMap = mutableMapOf<String, suspend (String) -> Unit>()
 
-    @ObsoleteCoroutinesApi
-    val marketWs by lazy { BalanceLoaderWebsocket(this::marketWsFactory) }
+    //@ObsoleteCoroutinesApi
+    val marketWs = BalanceLoaderWebsocket(this::marketWsFactory)
 
     private var authPromise = Promise.promise<Unit>()
 
-    @ObsoleteCoroutinesApi
-    private val tradingWs by lazy {
-        DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
-            val clear = buffer.bytes.decodeToString()
-            logger.trace(clear)
-            val obj = JsonParser.parseString(clear).asJsonObject
-            when (obj["action"].asString) {
-                "ping" -> {
-                    //ping-pong
-                    obj["action"] = "pong"
-                    sendText(Gson().toJson(obj))
-                }
-                "req" -> {
-                    logger.debug(obj.toString())
-                    if (obj["ch"].asString == "auth" && obj["code"].asInt == 200) {
-                        authPromise.complete()
-                    }
-                }
-                "sub" -> {
-                    logger.debug(obj.toString())
-                }
-                "unsub" -> {
-                }
-                "push" -> {
-                    invokeSubscriptionHandle(clear, obj["ch"].asString)
+    //@ObsoleteCoroutinesApi
+    private val tradingWs = DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
+        val clear = buffer.bytes.decodeToString()
+        logger.trace(clear)
+        val obj = JsonParser.parseString(clear).asJsonObject
+        when (obj["action"].asString) {
+            "ping" -> {
+                //ping-pong
+                obj["action"] = "pong"
+                sendText(Gson().toJson(obj))
+            }
+            "req" -> {
+                logger.debug(obj.toString())
+                if (obj["ch"].asString == "auth" && obj["code"].asInt == 200) {
+                    authPromise.complete()
                 }
             }
-        }, subscriptionHandler = { id ->
-            authPromise.future().await()
-            sendText(
+            "sub" -> {
+                logger.debug(obj.toString())
+            }
+            "unsub" -> {
+            }
+            "push" -> {
+                invokeSubscriptionHandle(clear, obj["ch"].asString)
+            }
+        }
+    }, subscriptionHandler = { id ->
+        authPromise.future().await()
+        sendText(
+            mapOf(
+                "action" to "sub",
+                "ch" to id
+            ).toJson()
+        )
+    }, unsubscriptionHandler = { id ->
+        sendText(
+            mapOf(
+                "action" to "unsub",
+                "ch" to id
+            ).toJson()
+        )
+    }, authenticationHandler = {
+        authPromise = Promise.promise()
+        val params = mutableMapOf<String, String>()
+        sign("GET", "/ws/v2", params, true)
+        sendText(
+            GsonBuilder().disableHtmlEscaping().create().toJson(
                 mapOf(
-                    "action" to "sub",
-                    "ch" to id
-                ).toJson()
-            )
-        }, unsubscriptionHandler = { id ->
-            sendText(
-                mapOf(
-                    "action" to "unsub",
-                    "ch" to id
-                ).toJson()
-            )
-        }, authenticationHandler = {
-            authPromise = Promise.promise()
-            val params = mutableMapOf<String, String>()
-            sign("GET", "/ws/v2", params, true)
-            sendText(
-                GsonBuilder().disableHtmlEscaping().create().toJson(
-                    mapOf(
-                        "action" to "req",
-                        "ch" to "auth",
-                        "params" to params
-                    )
+                    "action" to "req",
+                    "ch" to "auth",
+                    "params" to params
                 )
             )
-        })
-    }
+        )
+    })
 
     private suspend fun invokeSubscriptionHandle(clear: String, ch: String) {
         try {
             val handle = subscriptionHandleMap[ch]
             handle?.invoke(clear)
         } catch (e: Exception) {
-            logger.error(e.message)
             logger.error("Error in dispatch: $clear")
+            logger.error(e.message)
             e.printStackTrace()
         }
     }
@@ -175,6 +173,14 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     private fun publicUrl(path: String) = "https://api.huobi.pro$path"
 
     private fun authUrl(path: String) = "https://api.huobi.pro$path"
+
+    //@ObsoleteCoroutinesApi
+    override suspend fun setup() {
+        coroutineScope {
+            launch { tradingWs.setup() }
+            launch { marketWs.setup() }
+        }
+    }
 
     private fun checkResponse(resp: HttpResponse<Buffer>) {
         val obj = JsonParser.parseString(resp.bodyAsString()).asJsonObject
@@ -277,7 +283,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             period
         )
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     override suspend fun getKlines(
         symbol: Symbol,
         period: KlinePeriod,
@@ -319,8 +325,11 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
                 map[symbol(it["base-currency"], it["quote-currency"])] =
                     SymbolDecimalInfo(
                         it["price-precision"].asInt,
-                        it["amount-precision"].asInt,
-                        it["value-precision"].asInt
+                        min(
+                            it["limit-order-min-order-amt"].asBigDecimal.scale(),
+                            it["sell-market-min-order-amt"].asBigDecimal.scale()
+                        ),
+                        it["min-order-value"].asBigDecimal.scale()
                     )
             }
         map.forEach { (symbol, decimal) ->
@@ -515,7 +524,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         return resp.toJsonElement()["data"].asString
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     override suspend fun subscribeKline(symbol: Symbol, period: KlinePeriod, handle: suspend (Kline) -> Unit) {
         val id = "market.${symbol.replace("/", "")}.kline.${string(period)}"
         if (subscriptionHandleMap.containsKey(id)) {
@@ -530,7 +539,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         marketWs.subscribe(id)
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     override suspend fun unsubscribeKline(symbol: Symbol, period: KlinePeriod) {
         val id = "market.${symbol.replace("/", "")}.kline.${string(period)}"
         if (!subscriptionHandleMap.containsKey(id)) {
@@ -540,7 +549,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         marketWs.unsubscribe(id)
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     override suspend fun subscribeBestBidAsk(symbol: Symbol, handle: suspend (BidAsk) -> Unit) {
         val id = "market.${symbol.base}${symbol.quote}.bbo"
         if (subscriptionHandleMap.containsKey(id)) {
@@ -563,7 +572,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         marketWs.subscribe(id)
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     override suspend fun unsubscribeBestBidAsk(symbol: Symbol) {
         val id = "market.${symbol.base}${symbol.quote}.bbo"
         if (!subscriptionHandleMap.containsKey(id)) {
@@ -573,7 +582,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         marketWs.unsubscribe(id)
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     override suspend fun subscribeBalanceUpdate(handle: suspend (balances: Pair<Currency, Balance>) -> Unit) {
         val id = "accounts.update#2"
         if (subscriptionHandleMap.containsKey(id)) {
@@ -593,7 +602,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         tradingWs.subscribe(id)
     }
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     override suspend fun unsubscribeBalanceUpdate() {
         val id = "accounts.update#2"
         if (!subscriptionHandleMap.containsKey(id)) {

@@ -9,13 +9,14 @@ import io.vertx.kotlin.coroutines.awaitResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
 import org.slf4j.LoggerFactory
-import java.lang.Exception
 import java.net.URI
 import java.util.*
+import java.util.concurrent.Executors
 import java.util.concurrent.atomic.AtomicBoolean
 import kotlin.concurrent.schedule
 
 interface Websocket {
+    suspend fun setup() {}
     suspend fun subscribe(id: String)
     suspend fun unsubscribe(id: String)
     suspend fun sendText(text: String)
@@ -25,7 +26,7 @@ interface Websocket {
     val subscriptions: MutableList<String>
 }
 
-@ObsoleteCoroutinesApi
+//@ObsoleteCoroutinesApi
 class BalanceLoaderWebsocket(
     private val websocketFactory: () -> Websocket
 ) : Websocket {
@@ -60,9 +61,11 @@ class BalanceLoaderWebsocket(
     private val wsQueue =
         PriorityQueue<Websocket> { ws1, ws2 -> ws1.subscriptions.size - ws2.subscriptions.size }
 
-    init {
+    override suspend fun setup() {
         logger.debug("Initialize a new websocket")
-        wsQueue += websocketFactory()
+        val ws = websocketFactory()
+        ws.setup()
+        wsQueue += ws
     }
 
     private fun mostLighted(): Websocket {
@@ -82,14 +85,13 @@ class BalanceLoaderWebsocket(
     }
 }
 
-@ObsoleteCoroutinesApi
 class DefaultWebsocket(
     private val url: String,
     val handle: suspend DefaultWebsocket.(Buffer) -> Unit,
     val subscriptionHandler: suspend Websocket.(String) -> Unit,
     val unsubscriptionHandler: suspend Websocket.(String) -> Unit,
     val authenticationHandler: (suspend Websocket.() -> Unit)? = null
-) : CoroutineScope by defaultCoroutineScope(), Websocket {
+) : Websocket {
 
     private var receiveChannel = Channel<Buffer>()
     private var sendMessageChannel = Channel<String>()
@@ -101,64 +103,67 @@ class DefaultWebsocket(
     private var connectionBinaryBackoffBits = 1
     private var connectionMutex = AtomicBoolean(false)
 
-    @ObsoleteCoroutinesApi
-    private val eventLoopContext = newSingleThreadContext("${objSimpleName(this)}Context")
+    //    //@ObsoleteCoroutinesApi
+//    private val eventLoopContext = newSingleThreadContext("${objSimpleName(this)}Context")
+    private val eventLoopContext = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
-    init {
-        launch(eventLoopContext) {
-            logger.debug("Start running readChannel loop ${objSimpleName(this)}")
-            while (true) {
-                try {
-                    val buffer = receiveChannel.receive()
-                    handle(this@DefaultWebsocket, buffer)
-                } catch (e: CancellationException) {
-                    logger.debug(e.message)
-                }
-            }
-        }
-        launch(eventLoopContext) {
-            logger.debug("Start running sendMessageChannel loop ${objSimpleName(this)}")
-            while (true) {
-                while (!this@DefaultWebsocket::ws.isInitialized || ws.isClosed) {
-                    delay(100)
-                    continue
-                }
-                try {
-                    val text = sendMessageChannel.receive()
-                    if (text.contains("pong")) {
-                        logger.trace("Send $text")
-                    } else {
-                        logger.debug("Send $text")
+    override suspend fun setup() {
+        with(GlobalScope) {
+            launch(eventLoopContext) {
+                logger.debug("Start running readChannel loop ${objSimpleName(this)}")
+                while (true) {
+                    try {
+                        val buffer = receiveChannel.receive()
+                        handle(this@DefaultWebsocket, buffer)
+                    } catch (e: CancellationException) {
+                        logger.debug(e.message)
                     }
-                    awaitResult<Void> { ws.writeTextMessage(text, it) }
-                } catch (e: CancellationException) {
-                    logger.debug(e.message)
-                } catch (e: Exception) {
-                    logger.error(e.message)
-                    reconnect()
+                }
+            }
+            launch(eventLoopContext) {
+                logger.debug("Start running sendMessageChannel loop ${objSimpleName(this)}")
+                while (true) {
+                    while (!this@DefaultWebsocket::ws.isInitialized || ws.isClosed) {
+                        delay(100)
+                        continue
+                    }
+                    try {
+                        val text = sendMessageChannel.receive()
+                        if (text.contains("pong")) {
+                            logger.trace("Send $text")
+                        } else {
+                            logger.debug("Send $text")
+                        }
+                        awaitResult<Void> { ws.writeTextMessage(text, it) }
+                    } catch (e: CancellationException) {
+                        logger.debug(e.message)
+                    } catch (e: Exception) {
+                        logger.error(e.message)
+                        reconnect()
+                    }
+                }
+            }
+            launch(eventLoopContext) {
+                logger.debug("Start running sendPongChannel loop ${objSimpleName(this)}")
+                while (true) {
+                    while (!this@DefaultWebsocket::ws.isInitialized || ws.isClosed) {
+                        delay(100)
+                        continue
+                    }
+                    try {
+                        val text = sendPongChannel.receive()
+                        logger.trace("Send $text")
+                        awaitResult<Void> { ws.writePing(Buffer.buffer(text), it) }
+                    } catch (e: CancellationException) {
+                        logger.debug(e.message)
+                    } catch (e: Exception) {
+                        logger.error(e.message)
+                        reconnect()
+                    }
                 }
             }
         }
-        launch(eventLoopContext) {
-            logger.debug("Start running sendPongChannel loop ${objSimpleName(this)}")
-            while (true) {
-                while (!this@DefaultWebsocket::ws.isInitialized || ws.isClosed) {
-                    delay(100)
-                    continue
-                }
-                try {
-                    val text = sendPongChannel.receive()
-                    logger.trace("Send $text")
-                    awaitResult<Void> { ws.writePing(Buffer.buffer(text), it) }
-                } catch (e: CancellationException) {
-                    logger.debug(e.message)
-                } catch (e: Exception) {
-                    logger.error(e.message)
-                    reconnect()
-                }
-            }
-        }
-        runBlocking { connect() }
+        connect()
     }
 
     override suspend fun subscribe(id: String) {

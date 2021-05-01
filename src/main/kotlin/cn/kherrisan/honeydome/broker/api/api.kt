@@ -1,30 +1,14 @@
 package cn.kherrisan.honeydome.broker.api
 
-import cn.kherrisan.honeydome.broker.api.huobi.HuobiSpotApi
 import cn.kherrisan.honeydome.broker.common.*
-import cn.kherrisan.honeydome.broker.common.Currency
-import cn.kherrisan.honeydome.broker.defaultCoroutineScope
-import cn.kherrisan.honeydome.broker.objSimpleName
 import com.google.gson.JsonElement
 import com.google.gson.JsonObject
 import com.google.gson.JsonParser
 import io.vertx.core.buffer.Buffer
-import io.vertx.core.http.HttpClientOptions
-import io.vertx.core.http.WebSocket
 import io.vertx.ext.web.client.HttpResponse
-import io.vertx.kotlin.coroutines.awaitResult
-import kotlinx.coroutines.*
-import kotlinx.coroutines.channels.Channel
-import org.slf4j.LoggerFactory
-import java.lang.Exception
-import java.lang.RuntimeException
 import java.math.BigDecimal
 import java.math.RoundingMode
-import java.net.URI
 import java.time.ZonedDateTime
-import java.util.*
-import java.util.concurrent.atomic.AtomicBoolean
-import kotlin.concurrent.schedule
 
 fun HttpResponse<Buffer>.toJsonElement(): JsonObject {
     return JsonParser.parseString(bodyAsString()).asJsonObject
@@ -35,6 +19,7 @@ operator fun JsonElement.get(key: String): JsonElement {
 }
 
 interface SpotApi {
+    suspend fun setup()
     suspend fun getCurrencys(): List<Currency>
     suspend fun getSymbols(): List<Symbol>
     suspend fun getKlines(symbol: Symbol, period: KlinePeriod, start: ZonedDateTime, end: ZonedDateTime): List<Kline>
@@ -58,16 +43,16 @@ interface SpotApi {
     suspend fun subscribeOrderUpdate()
     suspend fun unsubscribeOrderUpdate()
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     suspend fun unsubscribeBestBidAsk(symbol: Symbol)
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     suspend fun subscribeBestBidAsk(symbol: Symbol, handle: suspend (BidAsk) -> Unit)
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     suspend fun unsubscribeKline(symbol: Symbol, period: KlinePeriod)
 
-    @ObsoleteCoroutinesApi
+    //@ObsoleteCoroutinesApi
     suspend fun subscribeKline(symbol: Symbol, period: KlinePeriod, handle: suspend (Kline) -> Unit)
 }
 
