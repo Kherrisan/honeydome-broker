@@ -3,10 +3,9 @@ package cn.kherrisan.honeydome.broker.api.huobi
 import cn.kherrisan.honeydome.broker.common.*
 import cn.kherrisan.honeydome.broker.repository.KlineRepository
 import cn.kherrisan.honeydome.broker.repository.Mongodb
-import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotFirmbargainService
+import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotService
 import kotlinx.coroutines.*
-import kotlinx.coroutines.flow.forEach
-import kotlinx.coroutines.flow.receiveAsFlow
+import kotlinx.coroutines.channels.consumeEach
 import org.junit.jupiter.api.*
 import org.junit.jupiter.api.Order
 import java.time.ZonedDateTime
@@ -15,7 +14,7 @@ import java.time.ZonedDateTime
 @TestMethodOrder(MethodOrderer.OrderAnnotation::class)
 class SpotServiceTest {
 
-    private val huobiSpotService = HuobiSpotFirmbargainService()
+    private val huobiSpotService = HuobiSpotService()
 
     @BeforeAll
     fun setupDB() = runBlocking {
@@ -49,14 +48,26 @@ class SpotServiceTest {
     @InternalCoroutinesApi
     fun getKlineChannel() = runBlocking {
         val end = ZonedDateTime.now()
-        var klineCursor = huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(50), end)
-        var klineOrClosed = klineCursor.receiveOrClosed()
         var klineList = mutableListOf<Kline>()
-        while (!klineOrClosed.isClosed) {
-            println(klineOrClosed.value)
-            klineList.add(klineOrClosed.value)
-            klineOrClosed = klineCursor.receiveOrClosed()
+        huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(50), end).consumeEach {
+            println(it)
+            klineList.add(it)
         }
+        println(klineList.size)
+        klineList.clear()
+        delay(3000)
+        huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(100), end.minusDays(40)).consumeEach {
+            println(it)
+            klineList.add(it)
+        }
+        println(klineList.size)
+        klineList.clear()
+        delay(3000)
+        huobiSpotService.getKlineChannel(BTC_USDT, KlinePeriod.DAY, end.minusDays(400), end.minusDays(20)).consumeEach {
+            println(it)
+            klineList.add(it)
+        }
+        println(klineList.size)
     }
 
     @Test
@@ -70,9 +81,8 @@ class SpotServiceTest {
     }
 
     @Test
-    @Order(2)
-    fun getKlineChanel() = runBlocking {
-
+    @Order(3)
+    fun getOrder() = runBlocking {
     }
 
     @AfterAll

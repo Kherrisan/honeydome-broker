@@ -2,13 +2,15 @@ package cn.kherrisan.honeydome.broker
 
 import cn.hutool.core.util.IdUtil
 import cn.kherrisan.honeydome.broker.api.VertxHolder
-import com.google.gson.Gson
+import com.google.gson.*
 import io.vertx.kotlin.coroutines.dispatcher
 import kotlinx.coroutines.*
 import java.io.ByteArrayInputStream
+import java.lang.reflect.Type
 import java.nio.charset.StandardCharsets
 import java.time.Instant
 import java.time.ZoneId
+import java.time.ZonedDateTime
 import java.time.format.DateTimeFormatter
 import java.util.zip.GZIPInputStream
 import javax.crypto.Mac
@@ -16,7 +18,7 @@ import javax.crypto.spec.SecretKeySpec
 
 fun objSimpleName(obj: Any?): String = "${obj?.javaClass?.simpleName}@${obj.hashCode()}"
 
-fun defaultCoroutineScope(): CoroutineScope = CoroutineScope(VertxHolder.vertx.dispatcher() + SupervisorJob())
+fun defaultCoroutineScope(): CoroutineScope = CoroutineScope(VertxHolder.vertx.dispatcher())
 
 var incrementId = 0
 
@@ -45,3 +47,19 @@ suspend fun coroutineFixedRateTimer(millis: Long, handler: suspend () -> Unit): 
 }
 
 fun randomId(): String = IdUtil.randomUUID().substring(0, 9)
+
+class ZonedDatetimeSerializer : JsonSerializer<ZonedDateTime> {
+    override fun serialize(src: ZonedDateTime?, typeOfSrc: Type?, context: JsonSerializationContext?): JsonElement {
+        if (src == null) {
+            return JsonNull.INSTANCE
+        } else {
+            return JsonPrimitive(src.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+        }
+    }
+}
+
+fun gson(): Gson {
+    val builder = GsonBuilder()
+    builder.registerTypeAdapter(ZonedDateTime::class.java, ZonedDatetimeSerializer())
+    return builder.create()
+}

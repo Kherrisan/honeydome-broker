@@ -1,14 +1,22 @@
 package cn.kherrisan.honeydome.broker
 
+import cn.kherrisan.honeydome.broker.repository.Mongodb
+import cn.kherrisan.honeydome.broker.service.Service
+import cn.kherrisan.honeydome.broker.web.Web
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
+import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.supervisorScope
 import org.slf4j.LoggerFactory
-import java.util.*
+
+private val logger = LoggerFactory.getLogger("main")
 
 fun main() {
-    val logger = LoggerFactory.getLogger("main")
-    logger.info("Launch Honeydome-Broker")
-    val pq = PriorityQueue<Int>()
-    for (i in 10 downTo 1) {
-        pq.add(i)
+    logger.info("启动 honeydome-broker")
+    runBlocking(defaultCoroutineScope().coroutineContext) {
+        Mongodb.setup()
+        Service.setup()
+        Web.setup()
+        logger.info("全部模块初始化成功")
     }
-    println(pq)
 }

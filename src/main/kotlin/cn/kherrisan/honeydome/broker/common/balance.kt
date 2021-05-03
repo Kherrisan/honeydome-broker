@@ -20,5 +20,16 @@ data class Balance(
 data class BalanceSnapshot(
     val exchange: Exchange,
     val time: ZonedDateTime,
-    val balances: Map<Currency, Balance>
-)
+    var balances: Map<Currency, Balance>
+) {
+    fun ignoreZeroBalance(): BalanceSnapshot {
+        val temp = balances.toMutableMap()
+        for ((currency, balance) in balances.entries) {
+            if (balance.free.stripTrailingZeros() == BigDecimal.ZERO && balance.frozen.stripTrailingZeros() == BigDecimal.ZERO) {
+                temp.remove(currency)
+            }
+        }
+        balances = temp
+        return this
+    }
+}

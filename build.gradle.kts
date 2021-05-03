@@ -1,8 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
 
 plugins {
-    kotlin("jvm") version "1.4.30"
-    kotlin("plugin.serialization") version "1.4.30"
+    kotlin("jvm") version "1.4.32"
+    kotlin("plugin.serialization") version "1.4.32"
     application
 }
 
@@ -22,10 +22,10 @@ repositories {
 }
 
 application {
-    mainClassName = "cn.kherrisan.honeydome.broker.MainKt"
+    mainClass.set("cn.kherrisan.honeydome.broker.MainKt")
 }
 
-val vertx_version = "4.0.3"
+val vertxVersion = "4.0.3"
 
 dependencies {
     implementation(kotlin("stdlib-jdk8"))
@@ -47,12 +47,13 @@ dependencies {
     implementation("org.litote.kmongo:kmongo-serialization:4.2.5")
     implementation("org.litote.kmongo:kmongo-coroutine-serialization:4.2.5")
 
-    //vertx 的协程工具
-    implementation("io.vertx:vertx-lang-kotlin-coroutines:$vertx_version")
-    implementation("io.vertx:vertx-lang-kotlin:$vertx_version")
+    //vertx
+    implementation("io.vertx:vertx-lang-kotlin-coroutines:$vertxVersion")
+    implementation("io.vertx:vertx-lang-kotlin:$vertxVersion")
+    implementation("io.vertx:vertx-web-client:$vertxVersion")
+    implementation("io.vertx:vertx-web:$vertxVersion")
+    implementation("io.vertx:vertx-web-openapi:$vertxVersion")
 
-    //vertx 的 websocket 实现
-    implementation("io.vertx:vertx-web-client:$vertx_version")
     implementation("org.junit.jupiter:junit-jupiter:5.4.2")
 
     testImplementation ("org.jetbrains.kotlin:kotlin-test-junit5")

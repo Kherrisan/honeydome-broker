@@ -1,0 +1,340 @@
+openapi: "3.0.0"
+info:
+    version: "1.0.0"
+    title: honeydome-broker-web
+    description: honeydome-broker web 访问的 openAPI 文档
+servers:
+    -   url: http://localhost:7800
+        description: local server stub
+paths:
+    /hello:
+        get:
+            description: 测试接口，用于判断 web 是否启动
+            operationId: helloWorld
+            responses:
+                200:
+                    description: 测试接口默认返回结果
+                    content:
+                        text/plain:
+                            schema:
+                                type: string
+                                example: hello world
+    /kline:
+        get:
+            description: 查询K线历史数据
+            operationId: getKlines
+            parameters:
+                -   name: exchange
+                    description: 交易所名称
+                    example: huobi
+                    in: query
+                    required: true
+                    schema:
+                        $ref: '#/components/schemas/Exchange'
+                -   name: symbol
+                    description: 交易对名称
+                    example: btc/usdt
+                    in: query
+                    required: true
+                    schema:
+                        type: string
+                -   name: period
+                    description: 查询的K线的粒度
+                    in: query
+                    required: true
+                    schema:
+                        type: string
+                        enum:
+                            - MINUTE
+                            - QUARTER
+                            - HOUR
+                            - DAY
+                            - WEEK
+                -   name: start
+                    description: 查询开始时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
+                -   name: end
+                    description: 查询结束时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
+            responses:
+                200:
+                    description: 返回指定查询范围内的K线数据
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/KlineList'
+    /balance:
+        get:
+            description: 查询当前账户余额
+            operationId: queryLatestBalance
+            parameters:
+                -   name: exchange
+                    description: 待查询余额的交易所
+                    in: query
+                    required: true
+                    schema:
+                        $ref: '#/components/schemas/Exchange'
+            responses:
+                200:
+                    description: 返回指定交易所的当前账户余额
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/BalanceSnapshot'
+    /balance/history:
+        get:
+            description: 查询一个时间段内的账户余额变动
+            operationId: queryHistoryBalance
+            parameters:
+                -   name: exchange
+                    description: 待查询的指定交易所
+                    in: query
+                    required: true
+                    schema:
+                        $ref: '#/components/schemas/Exchange'
+                -   name: start
+                    description: 查询开始时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
+                -   name: end
+                    description: 查询结束时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
+            responses:
+                200:
+                    description: 返回一段时间内账户余额快照的列表
+                    content:
+                        application/json:
+                            schema:
+                                type: array
+                                items:
+                                    $ref: '#/components/schemas/BalanceSnapshot'
+    /order:
+        get:
+            description: 查询订单列表
+            operationId: queryOrder
+            parameters:
+                -   name: exchange
+                    description: 交易所名称
+                    in: query
+                    schema:
+                        $ref: "#/components/schemas/Exchange"
+                -   name: symbol
+                    description: 交易对
+                    in: query
+                    schema:
+                        type: string
+                -   name: type
+                    description: 订单类型：限价单还是市价单
+                    in: query
+                    schema:
+                        $ref: "#/components/schemas/OrderType"
+                -   name: side
+                    description: 订单方向，买还是卖
+                    in: query
+                    schema:
+                        $ref: "#/components/schemas/OrderSide"
+                -   name: state
+                    description: 订单状态
+                    in: query
+                    schema:
+                        $ref: "#/components/schemas/OrderState"
+                -   name: time
+                    description: 订单创建时间
+                    in: query
+                    schema:
+                        type: string
+                        format: 'date-time'
+            responses:
+                200:
+                    description: 根据提供的条件查询得到的订单列表
+                    content:
+                        application/json:
+                            schema:
+                                type: object
+                                properties:
+                                    page:
+                                        $ref: '#/components/schemas/Page'
+                                    orders:
+                                        type: array
+                                        items:
+                                            $ref: '#/components/schemas/Order'
+    /order/{coid}:
+        get:
+            description: 通过coid查询订单信息
+            operationId: queryOrderById
+            parameters:
+                - name: coid
+                  description: 订单的coid
+                  in: path
+                  required: true
+                  schema:
+                      type: string
+            responses:
+                200:
+                    description: 指定订单信息
+                    content:
+                        application/json:
+                            schema:
+                                $ref: '#/components/schemas/Order'
+                404:
+                    description: 提供的coid指定的订单不存在
+components:
+    schemas:
+        Exchange:
+            description: 交易所名称
+            type: string
+            enum:
+                - huobi
+                - okex
+                - binance
+        OrderType:
+            description: 订单类型，市价/限价
+            type: string
+            enum:
+                - limit
+                - market
+        OrderSide:
+            description: 订单方向：买/卖
+            type: string
+            enum:
+                - buy
+                - sell
+        OrderState:
+            description: 订单状态
+            type: string
+            enum:
+                - created
+                - partial_filled
+                - filled
+                - canceled
+                - failed
+        Order:
+            description: 订单
+            type: object
+            properties:
+                oid:
+                    type: string
+                coid:
+                    type: string
+                exchange:
+                    $ref: '#/components/schemas/Exchange'
+                symbol:
+                    type: string
+                state:
+                    $ref: '#/components/schemas/OrderState'
+                side:
+                    $ref: '#/components/schemas/OrderSide'
+                type:
+                    $ref: '#/components/schemas/OrderType'
+                price:
+                    type: number
+                    format: float
+                size:
+                    type: number
+                    format: float
+                createTime:
+                    type: string
+                    format: 'date-time'
+                matches:
+                    type: array
+                    items:
+                        $ref: '#/components/schemas/OrderMatch'
+                backtest:
+                    type: boolean
+        OrderMatch:
+            description: 订单成交信息
+            type: object
+            properties:
+                mid:
+                    type: string
+                role:
+                    $ref: '#/components/schemas/OrderTradeRole'
+                price:
+                    type: number
+                    format: float
+                filledAmount:
+                    type: number
+                    format: float
+                fee:
+                    type: number
+                    format: float
+                feeCurrency:
+                    type: number
+                    format: float
+                time:
+                    type: string
+                    format: 'date-time'
+        OrderTradeRole:
+            description: 订单成交角色，maker/taker
+            type: string
+            enum:
+                - maker
+                - taker
+        Page:
+            description: 表数据的分页信息
+            type: object
+            properties:
+                totalElements:
+                    type: integer
+                    default: 100
+                totalPages:
+                    type: integer
+                    default: 10
+                size:
+                    type: integer
+                    default: 10
+        Kline:
+            description: K线数据项
+            type: object
+            properties:
+                open:
+                    type: number
+                    format: float
+                close:
+                    type: number
+                    format: float
+                high:
+                    type: number
+                    format: float
+                low:
+                    type: number
+                    format: float
+                vol:
+                    type: number
+                    format: float
+                time:
+                    type: string
+                    format: 'date-time'
+        KlineList:
+            type: array
+            items:
+                $ref: '#/components/schemas/Kline'
+        Balance:
+            description: 单一币种余额
+            type: object
+            properties:
+                free:
+                    type: number
+                    format: float
+                frozen:
+                    type: number
+                    format: float
+        BalanceSnapshot:
+            description: 所有币种余额
+            properties:
+                time:
+                    type: string
+                    format: 'date-time'
+            additionalProperties:
+                $ref: '#/components/schemas/Balance'
