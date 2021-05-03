@@ -17,7 +17,8 @@ import io.vertx.core.Promise
 import io.vertx.core.buffer.Buffer
 import io.vertx.ext.web.client.HttpResponse
 import io.vertx.kotlin.coroutines.await
-import kotlinx.coroutines.*
+import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.net.URLEncoder
@@ -36,8 +37,8 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     var accountId: String? = null
     var apiKey: String = ""
     var secretKey: String = ""
+    lateinit var currencys: List<Currency>
 
-    //@ObsoleteCoroutinesApi
     private fun marketWsFactory() = DefaultWebsocket("wss://api.huobi.pro/ws", handle = { buffer ->
         val decoded = ungzip(buffer.bytes)
         logger.trace(decoded)
@@ -80,12 +81,12 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private val subscriptionHandleMap = mutableMapOf<String, suspend (String) -> Unit>()
 
-    //@ObsoleteCoroutinesApi
+
     val marketWs = BalanceLoaderWebsocket(this::marketWsFactory)
 
     private var authPromise = Promise.promise<Unit>()
 
-    //@ObsoleteCoroutinesApi
+
     private val tradingWs = DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
         val clear = buffer.bytes.decodeToString()
         logger.trace(clear)
@@ -153,10 +154,13 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     }
 
     private val orderStateMap: Map<String, OrderState> = mapOf(
+        "submitted" to OrderState.CREATED,
         "created" to OrderState.CREATED,
         "partial-filled" to OrderState.PARTIAL_FILLED,
         "filled" to OrderState.FILLED,
-        "canceled" to OrderState.CANCELED
+        "canceled" to OrderState.CANCELED,
+        "partial-canceled" to OrderState.CANCELED,
+        "rejected" to OrderState.CANCELED
     )
 
     override val periodMap: Map<KlinePeriod, String>
@@ -174,7 +178,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private fun authUrl(path: String) = "https://api.huobi.pro$path"
 
-    //@ObsoleteCoroutinesApi
+
     override suspend fun setup() {
         coroutineScope {
             launch { tradingWs.setup() }
@@ -283,7 +287,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             period
         )
 
-    //@ObsoleteCoroutinesApi
+
     override suspend fun getKlines(
         symbol: Symbol,
         period: KlinePeriod,
@@ -428,6 +432,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
                 val fc = it["fee-currency"].asString
                 OrderMatch(
                     it["id"].asString,
+                    oid,
                     TradeRole.valueOf(it["role"].asString.toUpperCase()),
                     price(it["price"].asString.toBigDecimal(), symbol),
                     balance(it["filled-amount"].asString.toBigDecimal(), symbol),
@@ -482,20 +487,20 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         checkResponse(resp)
     }
 
-    override suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String {
-        return createOrder(symbol, OrderType.LIMIT, OrderSide.BUY, price, amount)
+    override suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String {
+        return createOrder(symbol, OrderType.LIMIT, OrderSide.BUY, price, amount, cid)
     }
 
-    override suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String {
-        return createOrder(symbol, OrderType.LIMIT, OrderSide.SELL, price, amount)
+    override suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String {
+        return createOrder(symbol, OrderType.LIMIT, OrderSide.SELL, price, amount, cid)
     }
 
-    override suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String {
-        return createOrder(symbol, OrderType.MARKET, OrderSide.BUY, null, amount)
+    override suspend fun marketBuy(symbol: Symbol, amount: BigDecimal, cid: String): String {
+        return createOrder(symbol, OrderType.MARKET, OrderSide.BUY, null, amount, cid)
     }
 
-    override suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String {
-        return createOrder(symbol, OrderType.MARKET, OrderSide.SELL, null, amount)
+    override suspend fun marketSell(symbol: Symbol, amount: BigDecimal, cid: String): String {
+        return createOrder(symbol, OrderType.MARKET, OrderSide.SELL, null, amount, cid)
     }
 
     private suspend fun createOrder(
@@ -503,7 +508,8 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         type: OrderType,
         side: OrderSide,
         price: BigDecimal?,
-        amount: BigDecimal
+        amount: BigDecimal,
+        cid: String
     ): String {
         var params = mutableMapOf<String, String>()
         sign("POST", "/v1/order/orders/place", params)
@@ -513,6 +519,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             "symbol" to symbol.replace("/", ""),
             "type" to "${side.toString().toLowerCase()}-${type.toString().toLowerCase()}",
             "amount" to amount.toString(),
+            "client-order-id" to cid,
             "source" to "api" // 现货交易填写“api”，杠杆交易填写“margin-api”
         )
         // 限价
@@ -524,7 +531,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         return resp.toJsonElement()["data"].asString
     }
 
-    //@ObsoleteCoroutinesApi
+
     override suspend fun subscribeKline(symbol: Symbol, period: KlinePeriod, handle: suspend (Kline) -> Unit) {
         val id = "market.${symbol.replace("/", "")}.kline.${string(period)}"
         if (subscriptionHandleMap.containsKey(id)) {
@@ -539,7 +546,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         marketWs.subscribe(id)
     }
 
-    //@ObsoleteCoroutinesApi
+
     override suspend fun unsubscribeKline(symbol: Symbol, period: KlinePeriod) {
         val id = "market.${symbol.replace("/", "")}.kline.${string(period)}"
         if (!subscriptionHandleMap.containsKey(id)) {
@@ -549,7 +556,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         marketWs.unsubscribe(id)
     }
 
-    //@ObsoleteCoroutinesApi
+
     override suspend fun subscribeBestBidAsk(symbol: Symbol, handle: suspend (BidAsk) -> Unit) {
         val id = "market.${symbol.base}${symbol.quote}.bbo"
         if (subscriptionHandleMap.containsKey(id)) {
@@ -572,7 +579,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         marketWs.subscribe(id)
     }
 
-    //@ObsoleteCoroutinesApi
+
     override suspend fun unsubscribeBestBidAsk(symbol: Symbol) {
         val id = "market.${symbol.base}${symbol.quote}.bbo"
         if (!subscriptionHandleMap.containsKey(id)) {
@@ -582,7 +589,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         marketWs.unsubscribe(id)
     }
 
-    //@ObsoleteCoroutinesApi
+
     override suspend fun subscribeBalanceUpdate(handle: suspend (balances: Pair<Currency, Balance>) -> Unit) {
         val id = "accounts.update#2"
         if (subscriptionHandleMap.containsKey(id)) {
@@ -602,7 +609,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         tradingWs.subscribe(id)
     }
 
-    //@ObsoleteCoroutinesApi
+
     override suspend fun unsubscribeBalanceUpdate() {
         val id = "accounts.update#2"
         if (!subscriptionHandleMap.containsKey(id)) {
@@ -611,11 +618,84 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         tradingWs.unsubscribe(id)
     }
 
-    override suspend fun subscribeOrderUpdate() {
-        TODO("subscribeOrderUpdate")
+    override suspend fun subscribeOrderUpdate(handle: suspend (Order) -> Unit) {
+        val id = "orders#*"
+        if (subscriptionHandleMap.containsKey(id)) {
+            return
+        }
+        subscriptionHandleMap[id] = {
+            val data = JsonParser.parseString(it).asJsonObject["data"].asJsonObject
+            val type = data["type"].asString
+            val symbol = symbol(data["symbol"].asString)
+            val price = if (data.has("orderPrice"))
+                price(data["orderPrice"].toString().toBigDecimal(), symbol)
+            else
+                BigDecimal.ZERO
+            val size = if (type == "buy-market")
+                amount(data["orderValue"].toString().toBigDecimal(), symbol)
+            else
+                amount(data["orderSize"].toString().toBigDecimal(), symbol)
+            val order = Order(
+                HUOBI,
+                if (data.has("orderId"))
+                    data["orderId"].asLong.toString()
+                else "",
+                data["clientOrderId"].asString,
+                symbol,
+                orderStateMap[data["orderStatus"].asString]!!,
+                OrderSide.valueOf(type.substringBefore("-").toUpperCase()),
+                price,
+                size,
+                ZonedDateTime.now(),
+                OrderType.valueOf(type.substringAfter("-").toUpperCase())
+            )
+            if (data["orderSource"].asString != "spot-api") {
+                order.coid = order.oid
+            }
+            handle(order)
+        }
+        tradingWs.subscribe(id)
     }
 
     override suspend fun unsubscribeOrderUpdate() {
         TODO("unsubscribeOrderUpdate")
+    }
+
+    override fun symbol(raw: String): Symbol {
+        for (quote in currencys) {
+            if (raw.endsWith(quote) && currencys.contains(raw.removeSuffix(quote))) {
+                return "${raw.removeSuffix(quote)}/$quote"
+            }
+        }
+        error("Invalid currency name: $raw")
+    }
+
+    override suspend fun subscribeOrderMatch(handle: suspend (OrderMatch) -> Unit) {
+        val id = "trade.clearing#*#0"
+        if (subscriptionHandleMap.containsKey(id)) {
+            return
+        }
+        subscriptionHandleMap[id] = {
+            val data = JsonParser.parseString(id).asJsonObject["data"].asJsonObject
+            val symbol = symbol(data["symbol"].asString)
+            val role = if (data["aggressor"].asBoolean) TradeRole.TAKER
+            else TradeRole.MAKER
+            val feeCurrency = data["feeCurrency"].asString.toLowerCase()
+            val match = OrderMatch(
+                data["tradeId"].asLong.toString(),
+                data["orderId"].asLong.toString(),
+                role,
+                price(data["tradePrice"].asString.toBigDecimal(), symbol),
+                amount(data["tradeVolume"].asString.toBigDecimal(), symbol),
+                balance(data["transactionFee"].asString.toBigDecimal(), feeCurrency),
+                feeCurrency,
+                ZonedDateTime.ofInstant(Instant.ofEpochMilli(data["tradeTime"].asLong), ZoneId.systemDefault())
+            )
+            handle(match)
+        }
+    }
+
+    override suspend fun unsubscribeOrderMatch() {
+        TODO("Not yet implemented")
     }
 }

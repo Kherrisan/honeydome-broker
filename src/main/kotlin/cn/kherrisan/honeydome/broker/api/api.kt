@@ -34,26 +34,20 @@ interface SpotApi {
     ): List<Order>
 
     suspend fun cancelOrder(oid: String, symbol: Symbol)
-    suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String
-    suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal): String
-    suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String
-    suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String
+    suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String
+    suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String
+    suspend fun marketBuy(symbol: Symbol, amount: BigDecimal, cid: String): String
+    suspend fun marketSell(symbol: Symbol, amount: BigDecimal, cid: String): String
     suspend fun subscribeBalanceUpdate(handle: suspend (balances: Pair<Currency, Balance>) -> Unit)
     suspend fun unsubscribeBalanceUpdate()
-    suspend fun subscribeOrderUpdate()
+    suspend fun subscribeOrderUpdate(handle: suspend (order: Order) -> Unit)
     suspend fun unsubscribeOrderUpdate()
-
-    //@ObsoleteCoroutinesApi
     suspend fun unsubscribeBestBidAsk(symbol: Symbol)
-
-    //@ObsoleteCoroutinesApi
     suspend fun subscribeBestBidAsk(symbol: Symbol, handle: suspend (BidAsk) -> Unit)
-
-    //@ObsoleteCoroutinesApi
     suspend fun unsubscribeKline(symbol: Symbol, period: KlinePeriod)
-
-    //@ObsoleteCoroutinesApi
     suspend fun subscribeKline(symbol: Symbol, period: KlinePeriod, handle: suspend (Kline) -> Unit)
+    suspend fun subscribeOrderMatch(handle: suspend (OrderMatch) -> Unit)
+    suspend fun unsubscribeOrderMatch()
 }
 
 const val DEFAULT_DECIMAL_SCALE = 4

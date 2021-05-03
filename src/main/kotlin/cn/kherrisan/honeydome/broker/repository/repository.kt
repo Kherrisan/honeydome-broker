@@ -1,10 +1,13 @@
 package cn.kherrisan.honeydome.broker.repository
 
 import cn.kherrisan.honeydome.broker.common.*
+import cn.kherrisan.honeydome.broker.gson
 import com.google.gson.Gson
 import com.mongodb.MongoBulkWriteException
 import com.mongodb.client.model.BulkWriteOptions
 import com.mongodb.client.model.IndexOptions
+import com.mongodb.client.model.UpdateOptions
+import org.bson.BsonDocument
 import org.litote.kmongo.*
 import java.time.ZonedDateTime
 
@@ -91,8 +94,15 @@ object BalanceRepository : Repository() {
 object OrderRepository : Repository() {
 
     suspend fun save(order: Order) {
-        db.getCollection<Order>()
-            .save(order)
+        if (order.coid.isEmpty()) {
+            var target = gson().toJsonTree(order)
+            target = target.asJsonObject.remove("coid")
+            db.getCollection<Order>()
+                .updateOne(Order::oid eq order.oid, BsonDocument.parse(gson().toJson(target)))
+        } else {
+            db.getCollection<Order>()
+                .save(order)
+        }
     }
 
     suspend fun queryByCoid(cid: String): Order? {
@@ -100,8 +110,15 @@ object OrderRepository : Repository() {
             .findOne(Order::coid eq cid)
     }
 
-    suspend fun queryByOid(oid: String): Order? {
+    suspend fun queryByExchangeAndOid(exchange: Exchange, oid: String): Order? {
         return db.getCollection<Order>()
-            .findOne(Order::oid eq oid)
+            .findOne(Order::exchange eq exchange, Order::oid eq oid)
     }
+}
+
+object OrderMatchTempRepository : Repository() {
+    suspend fun save(match: OrderMatch) = db.getCollection<OrderMatch>().save(match)
+
+    suspend fun queryAll(): List<OrderMatch> = db.getCollection<OrderMatch>().find().toList()
+    suspend fun delete(match: OrderMatch) = db.getCollection<OrderMatch>().deleteOneById(match.mid)
 }

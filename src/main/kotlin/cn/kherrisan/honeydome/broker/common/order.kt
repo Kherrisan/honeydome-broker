@@ -23,9 +23,6 @@ enum class OrderState {
     //订单已创建，但还未提交到交易系统
     CREATED,
 
-    //订单已提交到了交易系统，等待撮合
-    SUBMITTED,
-
     //订单已部分成交
     PARTIAL_FILLED,
 
@@ -61,7 +58,8 @@ data class Order(
 
 @Serializable
 data class OrderMatch(
-    val mid: String,
+    @SerialName("_id") val mid: String,
+    val oid: String,
     val role: TradeRole,
     val price: BigDecimal,
     val filledAmount: BigDecimal,

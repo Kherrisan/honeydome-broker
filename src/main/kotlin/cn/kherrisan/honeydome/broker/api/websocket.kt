@@ -26,7 +26,7 @@ interface Websocket {
     val subscriptions: MutableList<String>
 }
 
-//@ObsoleteCoroutinesApi
+
 class BalanceLoaderWebsocket(
     private val websocketFactory: () -> Websocket
 ) : Websocket {
@@ -102,10 +102,7 @@ class DefaultWebsocket(
     override val subscriptions = mutableListOf<String>()
     private var connectionBinaryBackoffBits = 1
     private var connectionMutex = AtomicBoolean(false)
-
-    //    //@ObsoleteCoroutinesApi
-//    private val eventLoopContext = newSingleThreadContext("${objSimpleName(this)}Context")
-    private val eventLoopContext = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    val eventLoopContext = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
     override suspend fun setup() {
         with(GlobalScope) {

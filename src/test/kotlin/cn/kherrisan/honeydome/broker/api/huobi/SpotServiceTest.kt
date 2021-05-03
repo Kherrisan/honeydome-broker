@@ -80,6 +80,11 @@ class SpotServiceTest {
         println(huobiSpotService.getBalance())
     }
 
+    @Test
+    @Order(3)
+    fun getOrder() = runBlocking {
+    }
+
     @AfterAll
     fun cleanDB() {
         runBlocking {

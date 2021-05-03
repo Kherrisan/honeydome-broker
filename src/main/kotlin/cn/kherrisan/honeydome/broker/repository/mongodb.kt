@@ -20,7 +20,7 @@ object Mongodb {
     init {
         val connectionStr = "mongodb://honeydome:honeydome_zou970514@localhost"
         val client = KMongo.createClient(connectionStr).coroutine
-        db = client.getDatabase("honeydome-broker")
+        db = client.getDatabase("honeydome")
     }
 
     suspend fun setup() {

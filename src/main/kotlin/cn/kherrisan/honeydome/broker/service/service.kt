@@ -7,10 +7,7 @@ import cn.kherrisan.honeydome.broker.common.Currency
 import cn.kherrisan.honeydome.broker.coroutineFixedRateTimer
 import cn.kherrisan.honeydome.broker.defaultCoroutineScope
 import cn.kherrisan.honeydome.broker.randomId
-import cn.kherrisan.honeydome.broker.repository.BalanceRepository
-import cn.kherrisan.honeydome.broker.repository.CommonInfoRepository
-import cn.kherrisan.honeydome.broker.repository.KlineRepository
-import cn.kherrisan.honeydome.broker.repository.OrderRepository
+import cn.kherrisan.honeydome.broker.repository.*
 import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
@@ -19,7 +16,6 @@ import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.time.ZonedDateTime
 import java.util.*
-import kotlin.math.ceil
 
 fun Exchange.spot(): SpotService = Service[this]
 
@@ -61,14 +57,13 @@ interface SpotService {
 abstract class AbstractSpotService(private val exchange: Exchange, val api: SpotApi) :
     SpotService {
 
-    private val logger = LoggerFactory.getLogger(this::class.java)
+    protected val logger = LoggerFactory.getLogger(this::class.java)
 
     abstract val klineRequestLimit: Int
     abstract val hasLogin: Boolean
 
     private lateinit var periodicalUpdateJob: Job
-    private lateinit var info: CommonInfo
-    private val orderIdClientIdMap = mutableMapOf<String, String>()
+    lateinit var info: CommonInfo
     private val balanceMap = mutableMapOf<Currency, Balance>()
 
     open suspend fun setup() {
@@ -77,12 +72,38 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
             launch { setupCommonInfo() }
             launch {
                 api.setup()
-                setupBalance()
+                launch { setupBalance() }
+                launch { setupOrder() }
+                launch { setupOrderMatch() }
             }
         }
     }
 
-    private suspend fun setupBalance() {
+    open suspend fun setupOrder() {
+        if (!hasLogin) {
+            return
+        }
+        api.subscribeOrderUpdate { updating ->
+            OrderRepository.save(updating)
+        }
+    }
+
+    open suspend fun setupOrderMatch() {
+        if (!hasLogin) {
+            return
+        }
+        api.subscribeOrderMatch { match ->
+            val order = OrderRepository.queryByExchangeAndOid(exchange, match.oid)
+            if (order == null) {
+                OrderMatchTempRepository.save(match)
+            } else {
+                order.matches.add(match)
+                OrderRepository.save(order)
+            }
+        }
+    }
+
+    open suspend fun setupBalance() {
         if (!hasLogin) {
             return
         }
@@ -101,7 +122,7 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
         BalanceRepository.save(snapshot)
     }
 
-    private suspend fun setupCommonInfo() {
+    open suspend fun setupCommonInfo() {
         var dbCommonInfo = CommonInfoRepository.queryCommonInfo(exchange)
         if (dbCommonInfo == null) {
             logger.info("数据库中没有查到${exchange}基础数据，这是第一次启动，从${exchange} API获取基础数据。")
@@ -248,48 +269,38 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
         return balanceMap
     }
 
-    override suspend fun getOrder(cid: String): Order {
-        TODO("Not yet implemented")
-    }
+    override suspend fun getOrder(cid: String): Order = OrderRepository.queryByCoid(cid)!!
 
     override suspend fun getOrderMatch(cid: String): List<OrderMatch> {
         TODO("Not yet implemented")
     }
 
     override suspend fun cancelOrder(cid: String) {
-
-    }
-
-    private suspend fun queryAndTrySetClientOrderId(oid: String): String {
-        val coid = randomId()
-        val order = OrderRepository.queryByOid(oid)
-        order?.apply {
-            this.coid = coid
-            OrderRepository.save(this)
-        }
-        if (order == null) {
-            orderIdClientIdMap[oid] = coid
-        }
-        return coid
+        val order = OrderRepository.queryByCoid(cid)!!
+        api.cancelOrder(order.oid, order.symbol)
     }
 
     override suspend fun limitBuy(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String {
-        val oid = api.limitBuy(symbol, price, amount)
-        return queryAndTrySetClientOrderId(oid)
+        val cid = "honeydome-${randomId()}"
+        api.limitBuy(symbol, price, amount, cid)
+        return cid
     }
 
     override suspend fun limitSell(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String {
-        val oid = api.limitSell(symbol, price, amount)
-        return queryAndTrySetClientOrderId(oid)
+        val cid = "honeydome-${randomId()}"
+        api.limitSell(symbol, price, amount, cid)
+        return cid
     }
 
     override suspend fun marketBuy(symbol: Symbol, amount: BigDecimal): String {
-        val oid = api.marketBuy(symbol, amount)
-        return queryAndTrySetClientOrderId(oid)
+        val cid = "honeydome-${randomId()}"
+        api.marketBuy(symbol, amount, cid)
+        return cid
     }
 
     override suspend fun marketSell(symbol: Symbol, amount: BigDecimal): String {
-        val oid = api.marketSell(symbol, amount)
-        return queryAndTrySetClientOrderId(oid)
+        val cid = "honeydome-${randomId()}"
+        api.marketSell(symbol, amount, cid)
+        return cid
     }
 }
