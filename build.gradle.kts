@@ -60,6 +60,11 @@ dependencies {
     testRuntimeOnly ("org.junit.jupiter:junit-jupiter-engine:5.6.0")
 }
 
+tasks.withType<Wrapper> {
+    gradleVersion = "6.7.1"
+    distributionType = Wrapper.DistributionType.BIN
+}
+
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         jvmTarget = "1.8"

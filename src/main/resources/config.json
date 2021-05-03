@@ -1,0 +1,8 @@
+{
+    "exchange": {
+        "huobi": {
+            "apiKey": "",
+            "secretKey": ""
+        }
+    }
+}
