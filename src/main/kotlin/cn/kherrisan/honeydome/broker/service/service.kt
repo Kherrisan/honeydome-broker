@@ -84,6 +84,7 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
             return
         }
         api.subscribeOrderUpdate { updating ->
+            logger.info("新的订单信息: $updating")
             OrderRepository.save(updating)
         }
     }
@@ -93,6 +94,7 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
             return
         }
         api.subscribeOrderMatch { match ->
+            logger.info("新的成交信息: $match")
             val order = OrderRepository.queryByExchangeAndOid(exchange, match.oid)
             if (order == null) {
                 OrderMatchTempRepository.save(match)
@@ -112,6 +114,7 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
         }
         takeBalanceSnapshot()
         api.subscribeBalanceUpdate { (currency, balance) ->
+            logger.info("新的账户余额变动: $currency: $balance")
             balanceMap[currency] = balance
             takeBalanceSnapshot()
         }

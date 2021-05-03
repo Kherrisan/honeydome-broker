@@ -86,10 +86,9 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private var authPromise = Promise.promise<Unit>()
 
-
     private val tradingWs = DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
         val clear = buffer.bytes.decodeToString()
-        logger.trace(clear)
+        logger.debug(clear)
         val obj = JsonParser.parseString(clear).asJsonObject
         when (obj["action"].asString) {
             "ping" -> {
@@ -619,7 +618,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
     }
 
     override suspend fun subscribeOrderUpdate(handle: suspend (Order) -> Unit) {
-        val id = "orders#*"
+        val id = "orders#btcusdt"
         if (subscriptionHandleMap.containsKey(id)) {
             return
         }
@@ -676,7 +675,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             return
         }
         subscriptionHandleMap[id] = {
-            val data = JsonParser.parseString(id).asJsonObject["data"].asJsonObject
+            val data = JsonParser.parseString(it).asJsonObject["data"].asJsonObject
             val symbol = symbol(data["symbol"].asString)
             val role = if (data["aggressor"].asBoolean) TradeRole.TAKER
             else TradeRole.MAKER
@@ -687,12 +686,13 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
                 role,
                 price(data["tradePrice"].asString.toBigDecimal(), symbol),
                 amount(data["tradeVolume"].asString.toBigDecimal(), symbol),
-                balance(data["transactionFee"].asString.toBigDecimal(), feeCurrency),
+                balance(data["transactFee"].asString.toBigDecimal(), feeCurrency),
                 feeCurrency,
                 ZonedDateTime.ofInstant(Instant.ofEpochMilli(data["tradeTime"].asLong), ZoneId.systemDefault())
             )
             handle(match)
         }
+        tradingWs.subscribe(id)
     }
 
     override suspend fun unsubscribeOrderMatch() {

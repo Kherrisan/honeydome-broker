@@ -11,6 +11,7 @@ import cn.kherrisan.honeydome.broker.service.AbstractSpotService
 import cn.kherrisan.kommons.get
 import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import org.litote.kmongo.or
 import java.math.BigDecimal
@@ -30,13 +31,19 @@ class HuobiSpotService : AbstractSpotService(HUOBI, HuobiSpotApi()) {
         huobiApi.secretKey = Config["exchange"]["huobi"]["secretKey"].asString
         logger.debug("Setup ${this::class.simpleName}")
         coroutineScope {
-            launch { setupCommonInfo() }
-            huobiApi.currencys = info.currencys
+            launch {
+                setupCommonInfo()
+                huobiApi.currencys = info.currencys
+            }
             launch {
                 api.setup()
-                launch { setupBalance() }
-                launch { setupOrder() }
-                launch { setupOrderMatch() }
+                delay(100)
+                setupBalance()
+                delay(100)
+                setupOrder()
+                delay(100)
+                setupOrderMatch()
+                delay(100)
             }
         }
     }

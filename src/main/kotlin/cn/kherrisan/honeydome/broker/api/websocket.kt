@@ -1,10 +1,10 @@
 package cn.kherrisan.honeydome.broker.api
 
-import cn.kherrisan.honeydome.broker.defaultCoroutineScope
 import cn.kherrisan.honeydome.broker.objSimpleName
 import io.vertx.core.buffer.Buffer
 import io.vertx.core.http.HttpClientOptions
 import io.vertx.core.http.WebSocket
+import io.vertx.core.net.*
 import io.vertx.kotlin.coroutines.awaitResult
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.Channel
@@ -206,6 +206,14 @@ class DefaultWebsocket(
         val uri = URI.create(url)
         var port = uri.port
         val options = HttpClientOptions()
+        val proxyOptions = ProxyOptions()
+        proxyOptions.host = "127.0.0.1"
+        proxyOptions.port = 8888
+        options.proxyOptions = proxyOptions
+        val sslOptions = PemKeyCertOptions()
+        sslOptions.certPath = "fiddler.crt"
+        sslOptions.keyPath = "id_rsa"
+        options.keyCertOptions = sslOptions
         if (uri.scheme == "wss") {
             options.isSsl = true
         }
