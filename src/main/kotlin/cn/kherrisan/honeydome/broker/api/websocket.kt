@@ -206,14 +206,14 @@ class DefaultWebsocket(
         val uri = URI.create(url)
         var port = uri.port
         val options = HttpClientOptions()
-        val proxyOptions = ProxyOptions()
-        proxyOptions.host = "127.0.0.1"
-        proxyOptions.port = 8888
-        options.proxyOptions = proxyOptions
-        val sslOptions = PemKeyCertOptions()
-        sslOptions.certPath = "fiddler.crt"
-        sslOptions.keyPath = "id_rsa"
-        options.keyCertOptions = sslOptions
+//        val proxyOptions = ProxyOptions()
+//        proxyOptions.host = "127.0.0.1"
+//        proxyOptions.port = 8888
+//        options.proxyOptions = proxyOptions
+//        val sslOptions = PemKeyCertOptions()
+//        sslOptions.certPath = "fiddler.crt"
+//        sslOptions.keyPath = "id_rsa"
+//        options.keyCertOptions = sslOptions
         if (uri.scheme == "wss") {
             options.isSsl = true
         }
