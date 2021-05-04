@@ -37,13 +37,13 @@ class HuobiSpotService : AbstractSpotService(HUOBI, HuobiSpotApi()) {
             }
             launch {
                 api.setup()
-                delay(100)
+                delay(200)
                 setupBalance()
-                delay(100)
+                delay(200)
                 setupOrder()
-                delay(100)
+                delay(200)
                 setupOrderMatch()
-                delay(100)
+                delay(200)
             }
         }
     }
