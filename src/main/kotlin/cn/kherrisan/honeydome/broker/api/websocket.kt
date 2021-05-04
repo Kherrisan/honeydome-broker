@@ -92,21 +92,20 @@ class DefaultWebsocket(
     val authenticationHandler: (suspend Websocket.() -> Unit)? = null
 ) : Websocket {
 
-    private var receiveBytesChannel = Channel<Buffer>(capacity = 1024)
+    private var receiveChannel = Channel<Buffer>(capacity = 1024)
     private var sendMessageChannel = Channel<String>(capacity = 1024)
     private var sendPongChannel = Channel<String>(capacity = 1024)
-    private var receiveTextChannel = Channel<String>()
     private val logger = LoggerFactory.getLogger(DefaultWebsocket::class.java)
     private val vertx = VertxHolder.vertx
     private lateinit var ws: WebSocket
     override val subscriptions = mutableListOf<String>()
     private var connectionBinaryBackoffBits = 1
     private var connectionMutex = AtomicBoolean(false)
-    val eventLoopContext = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
+    val singleThreadExecutor = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
     suspend fun handleChannelEvents() {
-        while (!receiveBytesChannel.isEmpty) {
-            val buffer = receiveBytesChannel.receive()
+        while (!receiveChannel.isEmpty) {
+            val buffer = receiveChannel.receive()
             handle(buffer)
         }
         while (!sendMessageChannel.isEmpty) {
@@ -118,22 +117,38 @@ class DefaultWebsocket(
 
     override suspend fun setup() {
         with(GlobalScope) {
-            launch {
+            launch(singleThreadExecutor) {
                 logger.debug("Start running readChannel loop ${objSimpleName(this)}")
-                for (buffer in receiveBytesChannel) {
-                    handle(this@DefaultWebsocket, buffer)
+                for (buffer in receiveChannel) {
+                    try {
+                        handle(this@DefaultWebsocket, buffer)
+                    } catch (e: Exception) {
+                        logger.error(e.message)
+                        e.printStackTrace()
+                    }
                 }
             }
-            launch {
+            launch(singleThreadExecutor) {
                 logger.debug("Start running sendMessageChannel loop ${objSimpleName(this)}")
                 for (text in sendMessageChannel) {
-                    ws.writeTextMessage(text)
+                    try {
+                        logger.trace(text)
+                        ws.writeTextMessage(text)
+                    } catch (e: Exception) {
+                        logger.error(e.message)
+                        e.printStackTrace()
+                    }
                 }
             }
-            launch {
+            launch(singleThreadExecutor) {
                 logger.debug("Start running sendPongChannel loop ${objSimpleName(this)}")
                 for (ping in sendPongChannel) {
-                    ws.writePing(Buffer.buffer(ping))
+                    try {
+                        ws.writePing(Buffer.buffer(ping))
+                    } catch (e: Exception) {
+                        logger.error(e.message)
+                        e.printStackTrace()
+                    }
                 }
             }
         }
@@ -206,7 +221,7 @@ class DefaultWebsocket(
         } finally {
 
         }
-        ws.handler { receiveBytesChannel.offer(it) }
+        ws.handler { receiveChannel.offer(it) }
         ws.closeHandler {}
         ws.exceptionHandler {
             runBlocking {

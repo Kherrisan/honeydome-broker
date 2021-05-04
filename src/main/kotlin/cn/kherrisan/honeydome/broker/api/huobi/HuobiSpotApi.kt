@@ -88,7 +88,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private val tradingWs = DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
         val clear = buffer.bytes.decodeToString()
-        logger.debug(clear)
+        logger.trace(clear)
         val obj = JsonParser.parseString(clear).asJsonObject
         when (obj["action"].asString) {
             "ping" -> {
