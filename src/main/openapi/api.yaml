@@ -6,10 +6,14 @@ info:
 servers:
     -   url: http://localhost:7800
         description: local server stub
+tags:
+    - name: broker
 paths:
     /hello:
         get:
             description: 测试接口，用于判断 web 是否启动
+            tags:
+                - broker
             operationId: helloWorld
             responses:
                 200:
@@ -22,6 +26,8 @@ paths:
     /kline:
         get:
             description: 查询K线历史数据
+            tags:
+                - broker
             operationId: getKlines
             parameters:
                 -   name: exchange
@@ -72,6 +78,8 @@ paths:
     /balance:
         get:
             description: 查询当前账户余额
+            tags:
+                - broker
             operationId: queryLatestBalance
             parameters:
                 -   name: exchange
@@ -90,6 +98,8 @@ paths:
     /balance/history:
         get:
             description: 查询一个时间段内的账户余额变动
+            tags:
+                - broker
             operationId: queryHistoryBalance
             parameters:
                 -   name: exchange
@@ -122,6 +132,8 @@ paths:
     /order:
         get:
             description: 查询订单列表
+            tags:
+                - broker
             operationId: queryOrder
             parameters:
                 -   name: exchange
@@ -172,6 +184,8 @@ paths:
     /order/{coid}:
         get:
             description: 通过coid查询订单信息
+            tags:
+                - broker
             operationId: queryOrderById
             parameters:
                 - name: coid
