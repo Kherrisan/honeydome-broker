@@ -6,7 +6,6 @@ import com.google.gson.Gson
 import com.mongodb.MongoBulkWriteException
 import com.mongodb.client.model.BulkWriteOptions
 import com.mongodb.client.model.IndexOptions
-import com.mongodb.client.model.UpdateOptions
 import org.bson.BsonDocument
 import org.litote.kmongo.*
 import java.time.ZonedDateTime

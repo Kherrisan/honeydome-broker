@@ -3,18 +3,14 @@ package cn.kherrisan.honeydome.broker.service.huobi
 import cn.kherrisan.honeydome.broker.Config
 import cn.kherrisan.honeydome.broker.api.huobi.HuobiSpotApi
 import cn.kherrisan.honeydome.broker.common.HUOBI
-import cn.kherrisan.honeydome.broker.common.Symbol
 import cn.kherrisan.honeydome.broker.coroutineFixedRateTimer
 import cn.kherrisan.honeydome.broker.repository.OrderMatchTempRepository
 import cn.kherrisan.honeydome.broker.repository.OrderRepository
 import cn.kherrisan.honeydome.broker.service.AbstractSpotService
 import cn.kherrisan.kommons.get
-import kotlinx.coroutines.CoroutineScope
 import kotlinx.coroutines.coroutineScope
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
-import org.litote.kmongo.or
-import java.math.BigDecimal
 
 class HuobiSpotService : AbstractSpotService(HUOBI, HuobiSpotApi()) {
     override val klineRequestLimit: Int

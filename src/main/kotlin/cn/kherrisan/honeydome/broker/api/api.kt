@@ -54,8 +54,6 @@ const val DEFAULT_DECIMAL_SCALE = 4
 
 interface DecimalAdaptor {
 
-    fun BigDecimal.toPrice(symbol: Symbol) = price(this, symbol)
-
     fun price(raw: BigDecimal, symbol: Symbol): BigDecimal =
         raw.setScale(priceMap.getOrDefault(symbol, DEFAULT_DECIMAL_SCALE), RoundingMode.DOWN)
 

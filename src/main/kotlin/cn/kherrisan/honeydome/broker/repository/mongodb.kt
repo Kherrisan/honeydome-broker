@@ -8,7 +8,7 @@ import org.litote.kmongo.serialization.ZonedDateTimeSerializer
 import org.litote.kmongo.serialization.registerSerializer
 import org.slf4j.LoggerFactory
 
-open class Repository() {
+open class Repository {
     val db = Mongodb.db
 }
 

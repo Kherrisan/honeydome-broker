@@ -31,7 +31,7 @@ class BalanceLoaderWebsocket(
 ) : Websocket {
 
     private val logger = LoggerFactory.getLogger(BalanceLoaderWebsocket::class.java)
-    var SUBCSRIPTIONS_THRESHOLD = 50
+    var subscriptionThreashold = 50
 
     override suspend fun sendText(text: String) {
         mostLighted().sendText(text)
@@ -68,7 +68,7 @@ class BalanceLoaderWebsocket(
     }
 
     private fun mostLighted(): Websocket {
-        if (wsQueue.isEmpty() || wsQueue.first().subscriptions.size >= SUBCSRIPTIONS_THRESHOLD) {
+        if (wsQueue.isEmpty() || wsQueue.first().subscriptions.size >= subscriptionThreashold) {
             logger.debug("Initialize a new websocket")
             wsQueue += websocketFactory()
         }
@@ -101,19 +101,7 @@ class DefaultWebsocket(
     override val subscriptions = mutableListOf<String>()
     private var connectionBinaryBackoffBits = 1
     private var connectionMutex = AtomicBoolean(false)
-    val singleThreadExecutor = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
-
-    suspend fun handleChannelEvents() {
-        while (!receiveChannel.isEmpty) {
-            val buffer = receiveChannel.receive()
-            handle(buffer)
-        }
-        while (!sendMessageChannel.isEmpty) {
-            val text = sendMessageChannel.receive()
-            ws.writeTextMessage(text)
-            logger.trace("Websocket has sent $text")
-        }
-    }
+    private val singleThreadExecutor = Executors.newSingleThreadExecutor().asCoroutineDispatcher()
 
     override suspend fun setup() {
         with(GlobalScope) {

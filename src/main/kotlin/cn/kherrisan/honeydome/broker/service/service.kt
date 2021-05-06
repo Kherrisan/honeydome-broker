@@ -12,6 +12,7 @@ import cn.kherrisan.honeydome.broker.service.huobi.HuobiSpotService
 import kotlinx.coroutines.*
 import kotlinx.coroutines.channels.ReceiveChannel
 import kotlinx.coroutines.channels.produce
+import org.slf4j.Logger
 import org.slf4j.LoggerFactory
 import java.math.BigDecimal
 import java.time.ZonedDateTime
@@ -57,7 +58,7 @@ interface SpotService {
 abstract class AbstractSpotService(private val exchange: Exchange, val api: SpotApi) :
     SpotService {
 
-    protected val logger = LoggerFactory.getLogger(this::class.java)
+    protected val logger: Logger = LoggerFactory.getLogger(this::class.java)
 
     abstract val klineRequestLimit: Int
     abstract val hasLogin: Boolean

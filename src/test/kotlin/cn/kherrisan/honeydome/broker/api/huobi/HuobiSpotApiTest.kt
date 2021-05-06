@@ -2,7 +2,6 @@ package cn.kherrisan.honeydome.broker.api.huobi
 
 import cn.kherrisan.honeydome.broker.common.BTC_USDT
 import cn.kherrisan.honeydome.broker.common.KlinePeriod
-import kotlinx.coroutines.ObsoleteCoroutinesApi
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
 import org.junit.jupiter.api.*
@@ -75,7 +74,7 @@ internal class HuobiSpotApiTest {
 
     @Test
     fun subscribeLoadBalancer() = runBlocking {
-        huobiSpotApi.marketWs.SUBCSRIPTIONS_THRESHOLD = 2
+        huobiSpotApi.marketWs.subscriptionThreashold = 2
         huobiSpotApi.subscribeKline(BTC_USDT, KlinePeriod.DAY) {
             println(it)
         }

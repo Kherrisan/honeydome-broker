@@ -60,12 +60,13 @@ dependencies {
     implementation("org.litote.kmongo:kmongo-serialization:4.2.5")
     implementation("org.litote.kmongo:kmongo-coroutine-serialization:4.2.5")
 
-    //vertx
+    // vertx
     implementation("io.vertx:vertx-lang-kotlin-coroutines:$vertxVersion")
     implementation("io.vertx:vertx-lang-kotlin:$vertxVersion")
     implementation("io.vertx:vertx-web-client:$vertxVersion")
     implementation("io.vertx:vertx-web:$vertxVersion")
     implementation("io.vertx:vertx-web-openapi:$vertxVersion")
+    implementation("io.vertx:vertx-grpc:$vertxVersion")
 
     implementation("org.junit.jupiter:junit-jupiter:5.4.2")
 
@@ -116,12 +117,16 @@ protobuf {
         id("grpckt") {
             artifact = "io.grpc:protoc-gen-grpc-kotlin:$grpcKotlinVersion:jdk7@jar"
         }
+//        id("vertx") {
+//            artifact = "io.vertx:vertx-grpc-protoc-plugin:$grpcVersion"
+//        }
     }
     generateProtoTasks {
         all().forEach { task ->
             task.plugins {
                 id("grpc")
                 id("grpckt")
+//                id("vertx")
             }
         }
     }

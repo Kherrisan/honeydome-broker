@@ -8,7 +8,6 @@ import kotlinx.serialization.UseSerializers
 import org.litote.kmongo.serialization.ZonedDateTimeSerializer
 import java.math.BigDecimal
 import java.time.ZonedDateTime
-import kotlin.math.ceil
 
 @Serializable
 data class Kline(

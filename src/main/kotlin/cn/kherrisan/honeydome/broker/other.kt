@@ -50,10 +50,10 @@ fun randomId(): String = IdUtil.randomUUID().substring(0, 9)
 
 class ZonedDatetimeSerializer : JsonSerializer<ZonedDateTime> {
     override fun serialize(src: ZonedDateTime?, typeOfSrc: Type?, context: JsonSerializationContext?): JsonElement {
-        if (src == null) {
-            return JsonNull.INSTANCE
+        return if (src == null) {
+            JsonNull.INSTANCE
         } else {
-            return JsonPrimitive(src.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
+            JsonPrimitive(src.format(DateTimeFormatter.ISO_OFFSET_DATE_TIME))
         }
     }
 }
