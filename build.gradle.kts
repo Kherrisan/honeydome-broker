@@ -1,10 +1,8 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
-import com.google.protobuf.gradle.*
 
 plugins {
     kotlin("jvm") version "1.4.32"
     kotlin("plugin.serialization") version "1.4.32"
-    id("com.google.protobuf") version "0.8.16"
     application
 }
 
@@ -37,6 +35,7 @@ val grpcKotlinVersion = "1.0.0"
 
 dependencies {
     implementation("org.jetbrains.kotlin:kotlin-stdlib")
+    implementation("org.jetbrains.kotlin:kotlin-reflect:1.4.20")
 
     //自己写的一些 kt 小轮子
     implementation("cn.kherrisan:kommons:1.0.8")
@@ -59,6 +58,7 @@ dependencies {
     // kmongo
     implementation("org.litote.kmongo:kmongo-serialization:4.2.5")
     implementation("org.litote.kmongo:kmongo-coroutine-serialization:4.2.5")
+    implementation("org.litote.kmongo:kmongo:4.2.5")
 
     // vertx
     implementation("io.vertx:vertx-lang-kotlin-coroutines:$vertxVersion")
@@ -75,27 +75,6 @@ dependencies {
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.6.0")
 }
 
-sourceSets {
-    main {
-//        kotlin {
-//            srcDir("build/generated/source/proto/main/grpckt")
-//        }
-        java {
-            srcDir("build/generated/source/proto/main/grpckt")
-            srcDir("build/generated/source/proto/main/grpc")
-            srcDir("build/generated/source/proto/main/java")
-        }
-        proto {
-            srcDir("src/main/protobuf")
-        }
-    }
-    test {
-        proto {
-            srcDir("src/main/protobuf")
-        }
-    }
-}
-
 tasks.withType<KotlinCompile> {
     kotlinOptions {
         jvmTarget = "1.8"
@@ -104,30 +83,4 @@ tasks.withType<KotlinCompile> {
 
 tasks.test {
     useJUnitPlatform()
-}
-
-protobuf {
-    protoc {
-        artifact = "com.google.protobuf:protoc:$protocVersion"
-    }
-    plugins {
-        id("grpc") {
-            artifact = "io.grpc:protoc-gen-grpc-java:$grpcVersion"
-        }
-        id("grpckt") {
-            artifact = "io.grpc:protoc-gen-grpc-kotlin:$grpcKotlinVersion:jdk7@jar"
-        }
-//        id("vertx") {
-//            artifact = "io.vertx:vertx-grpc-protoc-plugin:$grpcVersion"
-//        }
-    }
-    generateProtoTasks {
-        all().forEach { task ->
-            task.plugins {
-                id("grpc")
-                id("grpckt")
-//                id("vertx")
-            }
-        }
-    }
 }

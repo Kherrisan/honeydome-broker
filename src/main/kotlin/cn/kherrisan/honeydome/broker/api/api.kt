@@ -34,6 +34,7 @@ interface SpotApi {
     ): List<Order>
 
     suspend fun cancelOrder(oid: String, symbol: Symbol)
+    suspend fun getFee(symbol: Symbol): Fee
     suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String
     suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String
     suspend fun marketBuy(symbol: Symbol, amount: BigDecimal, cid: String): String

@@ -20,7 +20,8 @@ import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.time.ZonedDateTime
 
-const val API_YAML_PATH = "https://raw.githubusercontent.com/Kherrisan/honeydome-broker/master/src/main/openapi/broker.yaml"
+const val API_YAML_PATH =
+    "https://raw.githubusercontent.com/Kherrisan/honeydome-broker/master/src/main/openapi/broker.yaml"
 
 object Web {
     private val logger = LoggerFactory.getLogger(this::class.java)
@@ -97,7 +98,7 @@ class WebVerticle : CoroutineVerticle() {
 
     private suspend fun handleQueryLatestBalance(ctx: RoutingContext): Unit = ctx.request().run {
         val exchange = getParam("exchange").toLowerCase()
-        val snapshot = BalanceSnapshot(exchange, ZonedDateTime.now(), exchange.spot().getBalance()).ignoreZeroBalance()
+        val snapshot = BalanceSnapshot(exchange, exchange.spot().getBalance(), ZonedDateTime.now())
         response().end(gson().toJson(snapshot))
     }
 
@@ -106,7 +107,6 @@ class WebVerticle : CoroutineVerticle() {
         val end = getParam("end")?.let { ZonedDateTime.parse(it) } ?: ZonedDateTime.now()
         val start = getParam("start")?.let { ZonedDateTime.parse(it) } ?: end.minusDays(5)
         val snapshots = BalanceRepository.queryByExchangeAndDatetimeRange(exchange, start, end)
-        snapshots.forEach { it.ignoreZeroBalance() }
         response().end(gson().toJson(snapshots))
     }
 }

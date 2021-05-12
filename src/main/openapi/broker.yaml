@@ -7,7 +7,7 @@ servers:
     -   url: http://localhost:7800
         description: local server stub
 tags:
-    - name: broker
+    -   name: broker
 paths:
     /hello:
         get:
@@ -188,12 +188,12 @@ paths:
                 - broker
             operationId: queryOrderById
             parameters:
-                - name: coid
-                  description: 订单的coid
-                  in: path
-                  required: true
-                  schema:
-                      type: string
+                -   name: coid
+                    description: 订单的coid
+                    in: path
+                    required: true
+                    schema:
+                        type: string
             responses:
                 200:
                     description: 指定订单信息

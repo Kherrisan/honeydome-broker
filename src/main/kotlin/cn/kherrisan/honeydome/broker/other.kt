@@ -63,3 +63,5 @@ fun gson(): Gson {
     builder.registerTypeAdapter(ZonedDateTime::class.java, ZonedDatetimeSerializer())
     return builder.create()
 }
+
+fun String.toZonedDateTime(): ZonedDateTime = ZonedDateTime.parse(this, DateTimeFormatter.ISO_DATE_TIME)

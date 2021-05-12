@@ -22,6 +22,7 @@ fun Exchange.spot(): SpotService = Service[this]
 
 object Service {
 
+    private val logger = LoggerFactory.getLogger(this::class.java)
     private val map: MutableMap<Exchange, SpotService> = mutableMapOf()
 
     operator fun get(exchange: Exchange): SpotService {
@@ -29,6 +30,7 @@ object Service {
     }
 
     suspend fun setup() {
+        logger.info("初始化 Service 模块")
         map[HUOBI] = HuobiSpotService()
         coroutineScope {
             map.values.forEach { launch { (it as AbstractSpotService).setup() } }
@@ -37,6 +39,8 @@ object Service {
 }
 
 interface SpotService {
+    suspend fun getCurrencys(): List<Currency>
+    suspend fun getSymbols(): List<Symbol>
     suspend fun getKline(symbol: Symbol, period: KlinePeriod, start: ZonedDateTime, end: ZonedDateTime): List<Kline>
     suspend fun getKlineChannel(
         symbol: Symbol,
@@ -45,9 +49,9 @@ interface SpotService {
         end: ZonedDateTime
     ): ReceiveChannel<Kline>
 
-    suspend fun getBalance(): Map<Currency, Balance>
+    suspend fun getBalance(): BalanceMap
     suspend fun getOrder(cid: String): Order
-    suspend fun getOrderMatch(cid: String): List<OrderMatch>
+    suspend fun getFee(symbol: Symbol): Fee
     suspend fun cancelOrder(cid: String)
     suspend fun limitBuy(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String
     suspend fun limitSell(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String
@@ -65,7 +69,7 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
 
     private lateinit var periodicalUpdateJob: Job
     lateinit var info: CommonInfo
-    private val balanceMap = mutableMapOf<Currency, Balance>()
+    private val balanceMap = BalanceMap()
 
     open suspend fun setup() {
         logger.debug("Setup ${this::class.simpleName}")
@@ -122,7 +126,7 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
     }
 
     private suspend fun takeBalanceSnapshot() {
-        val snapshot = BalanceSnapshot(exchange, ZonedDateTime.now(), balanceMap)
+        val snapshot = BalanceSnapshot(exchange, balanceMap, ZonedDateTime.now())
         BalanceRepository.save(snapshot)
     }
 
@@ -146,6 +150,10 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
             CommonInfoRepository.save(info)
         }
     }
+
+    override suspend fun getCurrencys(): List<Currency> = info.currencys
+
+    override suspend fun getSymbols(): List<Symbol> = info.symbols
 
     override suspend fun getKline(
         symbol: Symbol,
@@ -265,23 +273,27 @@ abstract class AbstractSpotService(private val exchange: Exchange, val api: Spot
         }
     }
 
-    override suspend fun getBalance(): Map<Currency, Balance> {
+    override suspend fun getBalance(): BalanceMap {
         if (!hasLogin) {
-            logger.error("尚未登录，无法获取账户余额。")
-            return emptyMap()
+            error("尚未登录，无法获取账户余额。")
         }
         return balanceMap
     }
 
     override suspend fun getOrder(cid: String): Order = OrderRepository.queryByCoid(cid)!!
 
-    override suspend fun getOrderMatch(cid: String): List<OrderMatch> {
-        TODO("Not yet implemented")
-    }
-
     override suspend fun cancelOrder(cid: String) {
         val order = OrderRepository.queryByCoid(cid)!!
         api.cancelOrder(order.oid, order.symbol)
+    }
+
+    override suspend fun getFee(symbol: Symbol): Fee {
+        if (!info.fees.contains(symbol)) {
+            val fee = api.getFee(symbol)
+            info.fees[symbol] = fee
+            CommonInfoRepository.save(info)
+        }
+        return info.fees[symbol]!!
     }
 
     override suspend fun limitBuy(symbol: Symbol, price: BigDecimal, amount: BigDecimal): String {

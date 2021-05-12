@@ -18,17 +18,26 @@ data class Balance(
 @Serializable
 data class BalanceSnapshot(
     val exchange: Exchange,
-    val time: ZonedDateTime,
-    var balances: Map<Currency, Balance>
+    var balances: BalanceMap,
+    val time: ZonedDateTime
+)
+
+@Serializable
+data class BalanceMap(
+    private val map: MutableMap<Currency, Balance> = mutableMapOf()
 ) {
-    fun ignoreZeroBalance(): BalanceSnapshot {
-        val temp = balances.toMutableMap()
-        for ((currency, balance) in balances.entries) {
-            if (balance.free.stripTrailingZeros() == BigDecimal.ZERO && balance.frozen.stripTrailingZeros() == BigDecimal.ZERO) {
-                temp.remove(currency)
-            }
+    operator fun get(currency: Currency): Balance {
+        return if (map.contains(currency)) {
+            map[currency]!!
+        } else {
+            Balance()
         }
-        balances = temp
-        return this
+    }
+
+    operator fun set(currency: Currency, balance: Balance) {
+        map[currency] = balance
+        if (balance.free == BigDecimal.ZERO && balance.frozen == BigDecimal.ZERO) {
+            map.remove(currency)
+        }
     }
 }
