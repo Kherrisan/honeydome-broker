@@ -1,8 +1,8 @@
 {
     "exchange": {
         "huobi": {
-            "apiKey": "",
-            "secretKey": ""
+            "apiKey": "f71336b3-098482c3-2d8dde94-bvrge3rf7j",
+            "secretKey": "d176c95d-6bf75aa0-3e7e7c06-b969d"
         }
     }
 }

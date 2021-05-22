@@ -18,8 +18,9 @@ object Mongodb {
     val db: CoroutineDatabase
 
     init {
-        val connectionStr = "mongodb://honeydome:honeydome_zou970514@localhost"
-        val client = KMongo.createClient(connectionStr).coroutine
+//        val connectionStr = "mongodb://honeydome:honeydome_zou970514@localhost"
+//        val client = KMongo.createClient(connectionStr).coroutine
+        val client = KMongo.createClient().coroutine
         db = client.getDatabase("honeydome")
     }
 

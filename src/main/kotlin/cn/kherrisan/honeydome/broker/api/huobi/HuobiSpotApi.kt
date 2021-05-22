@@ -627,13 +627,13 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
             val type = data["type"].asString
             val symbol = symbol(data["symbol"].asString)
             val price = if (data.has("orderPrice"))
-                price(data["orderPrice"].toString().toBigDecimal(), symbol)
+                price(data["orderPrice"].asString.toBigDecimal(), symbol)
             else
                 BigDecimal.ZERO
             val size = if (type == "buy-market")
-                amount(data["orderValue"].toString().toBigDecimal(), symbol)
+                amount(data["orderValue"].asString.toBigDecimal(), symbol)
             else
-                amount(data["orderSize"].toString().toBigDecimal(), symbol)
+                amount(data["orderSize"].asString.toBigDecimal(), symbol)
             val order = Order(
                 HUOBI,
                 if (data.has("orderId"))

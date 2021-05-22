@@ -106,7 +106,7 @@ class DefaultWebsocket(
 
     override suspend fun setup() {
         with(GlobalScope) {
-            launch(eventLoopContext) {
+            launch {
                 logger.debug("Start running readChannel loop ${objSimpleName(this)}")
                 while (true) {
                     try {
@@ -117,7 +117,7 @@ class DefaultWebsocket(
                     }
                 }
             }
-            launch(eventLoopContext) {
+            launch {
                 logger.debug("Start running sendMessageChannel loop ${objSimpleName(this)}")
                 while (true) {
                     while (!this@DefaultWebsocket::ws.isInitialized || ws.isClosed) {
@@ -140,7 +140,7 @@ class DefaultWebsocket(
                     }
                 }
             }
-            launch(eventLoopContext) {
+            launch {
                 logger.debug("Start running sendPongChannel loop ${objSimpleName(this)}")
                 while (true) {
                     while (!this@DefaultWebsocket::ws.isInitialized || ws.isClosed) {
