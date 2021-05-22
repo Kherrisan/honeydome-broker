@@ -3,7 +3,6 @@
 package cn.kherrisan.honeydome.broker.common
 
 import com.github.jershell.kbson.BigDecimalSerializer
-import kotlinx.serialization.Contextual
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlinx.serialization.UseSerializers
@@ -46,14 +45,14 @@ data class Order(
     var oid: String,
     @SerialName("_id") var coid: String,
     val symbol: Symbol,
-    val state: OrderState,
+    var state: OrderState,
     val side: OrderSide,
     var price: BigDecimal,
     val amount: BigDecimal,
     val createTime: ZonedDateTime,
     val type: OrderType,
-    val backtest: Boolean = false,
-    val matches: MutableList<OrderMatch> = mutableListOf()
+    val matches: MutableList<OrderMatch> = mutableListOf(),
+    var balanceSnapshot: BalanceMap = BalanceMap()
 )
 
 @Serializable

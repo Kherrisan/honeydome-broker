@@ -9,5 +9,6 @@ data class CommonInfo(
     var currencys: List<Currency>,
     var symbols: List<Symbol>,
     var symbolDecimalInfo: MutableMap<Symbol, SymbolDecimalInfo>,
-    var currencyDecimalInfo: MutableMap<Currency, Int>
+    var currencyDecimalInfo: MutableMap<Currency, Int>,
+    var fees: MutableMap<Symbol, Fee> = mutableMapOf()
 )

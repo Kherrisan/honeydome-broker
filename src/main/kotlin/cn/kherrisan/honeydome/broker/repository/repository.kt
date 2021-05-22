@@ -6,7 +6,6 @@ import com.google.gson.Gson
 import com.mongodb.MongoBulkWriteException
 import com.mongodb.client.model.BulkWriteOptions
 import com.mongodb.client.model.IndexOptions
-import com.mongodb.client.model.UpdateOptions
 import org.bson.BsonDocument
 import org.litote.kmongo.*
 import java.time.ZonedDateTime
@@ -37,6 +36,16 @@ object KlineRepository : Repository() {
         indexes = mapOf("start" to 1, "end" to 1)
         collection.createIndex(Gson().toJson(indexes))
     }
+
+    suspend fun queryLastKline(exchange: Exchange, symbol: Symbol, time: ZonedDateTime) =
+        db.getCollection<Kline>()
+            .find(
+                Kline::exchange eq exchange,
+                Kline::symbol eq symbol,
+                Kline::time gte time
+            )
+            .ascendingSort(Kline::time)
+            .first()
 
     suspend fun queryKline(
         exchange: Exchange,
@@ -74,7 +83,7 @@ object KlineRepository : Repository() {
 object BalanceRepository : Repository() {
     suspend fun save(snapshot: BalanceSnapshot) {
         db.getCollection<BalanceSnapshot>()
-            .save(snapshot.ignoreZeroBalance())
+            .save(snapshot)
     }
 
     suspend fun queryByExchangeAndDatetimeRange(
@@ -118,7 +127,11 @@ object OrderRepository : Repository() {
 
 object OrderMatchTempRepository : Repository() {
     suspend fun save(match: OrderMatch) = db.getCollection<OrderMatch>().save(match)
-
     suspend fun queryAll(): List<OrderMatch> = db.getCollection<OrderMatch>().find().toList()
     suspend fun delete(match: OrderMatch) = db.getCollection<OrderMatch>().deleteOneById(match.mid)
+}
+
+object ProcessRepository : Repository() {
+    suspend fun save(process: cn.kherrisan.honeydome.broker.engine.Process) =
+        db.getCollection<cn.kherrisan.honeydome.broker.engine.Process>().save(process)
 }

@@ -1,0 +1,172 @@
+syntax = "proto3";
+
+option java_package = "cn.kherrisan.honeydome.broker.grpc";
+
+message Empty{
+
+}
+
+message Response{
+  uint32 code = 1;
+  string msg = 2;
+}
+
+message ProcessRequest{
+  string id = 1;
+}
+
+message StartProcessRequest{
+  string id = 1;  //process id，由 engine 决定并传给 py 端
+  string name = 2;  //strategy 的名字，即文件名，xxx.py
+  uint32 port = 3;  //data feeding 的端口
+  map<string, string> args = 4; //其他参数
+}
+
+message TimerSchedulingRequest{
+  string pid = 1;
+  string name = 2;
+  uint64 ts = 3;
+}
+
+service TimerScheduling{
+  rpc schedule(TimerSchedulingRequest) returns (Response);
+}
+
+enum Exchange{
+  HUOBI = 0;
+  OKEX = 1;
+  BINANCE = 2;
+}
+
+message StartProcessResponse{
+  message Subscription{
+    Exchange exchange = 1;
+    string symbol = 2;
+  }
+  repeated Subscription subscriptions = 1;
+  map<string, int32> timers = 2;
+  uint32 port = 3;
+}
+
+service ProcessManagement{
+  rpc start(StartProcessRequest) returns (StartProcessResponse);
+  rpc stop(ProcessRequest) returns (Response);
+  rpc ping(ProcessRequest) returns (Response);
+}
+
+message TickerResponse{
+  string exchange = 1;
+  string symbol = 2;
+  double amount = 3;
+  double vol = 4;
+  double open = 5;
+  double close = 6;
+  double high = 7;
+  double low = 8;
+  double bid = 9;
+  double ask = 10;
+  uint64 ts = 11;
+}
+
+message SimpleDataRequest{
+  Exchange exchange = 1;
+  string symbol = 2;
+}
+
+enum KlinePeriod{
+  MINUTE = 0;
+  HOUR = 1;
+  DAY = 2;
+  WEEK = 3;
+}
+
+message KlineRequest{
+  Exchange exchange = 1;
+  string symbol = 2;
+  KlinePeriod period = 3;
+}
+
+message KlinesRequest{
+  KlineRequest request = 1;
+  uint64 start = 2;
+  uint64 end = 3;
+}
+
+message KlinesResponse{
+  Exchange exchange = 1;
+  string symbol = 2;
+  message Kline{
+    double open = 1;
+    double close = 2;
+    double high = 3;
+    double low = 4;
+    double vol = 5;
+    uint64 ts = 6;
+  }
+  repeated Kline klines = 3;
+}
+
+message DepthRequest{
+  Exchange exchange = 1;
+  string symbol = 2;
+}
+
+message DepthResponse{
+  message Depth{
+    double price = 1;
+    double amount = 2;
+  }
+  repeated Depth bids = 1;
+  repeated Depth asks = 2;
+}
+
+message SpotTradingRequest{
+  Exchange exchange = 1;
+  string symbol = 2;
+  double price = 3;
+  double amount = 4;
+  map<string, string> args = 5;
+}
+
+message BalanceRequest{
+  Exchange exchange = 1;
+  string currency = 2;
+}
+
+message SpotBalance{
+  string currency = 1;
+  double free = 2;
+  double frozen = 3;
+}
+
+message OrderRequest{
+  string oid = 1;
+}
+
+message SpotOrderInfo{
+  Exchange exchange = 1;
+  string symbol = 2;
+  double price = 3;
+  double amount = 4;
+  enum SpotOrderState{
+    SUBMITTED = 0;
+    PARTIAL_FILLED = 1;
+    FILLED = 2;
+    CANCELED = 3;
+  }
+  SpotOrderState state = 5;
+}
+
+service SpotMarket{
+  rpc ticker(SimpleDataRequest) returns (TickerResponse);
+  rpc klines(KlinesRequest) returns (KlinesResponse);
+  rpc kline(KlineRequest) returns (KlinesResponse.Kline);
+  rpc depth(DepthRequest) returns (DepthResponse);
+  rpc limitBuy(SpotTradingRequest) returns (Response);
+  rpc limitSell(SpotTradingRequest) returns (Response);
+  rpc marketBuy(SpotTradingRequest) returns (Response);
+  rpc marketSell(SpotTradingRequest) returns (Response);
+  rpc balance(BalanceRequest) returns (SpotBalance);
+  rpc queryOrder(OrderRequest) returns (SpotOrderInfo);
+  rpc cancelOrder(OrderRequest) returns (Response);
+}

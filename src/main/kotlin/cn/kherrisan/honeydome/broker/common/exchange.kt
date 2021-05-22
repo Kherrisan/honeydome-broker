@@ -7,5 +7,3 @@ const val BINANCE: Exchange = "binance"
 const val OKEX: Exchange = "okex"
 
 val Exchanges = listOf(HUOBI, BINANCE, OKEX)
-
-fun Exchange.isExchange(): Boolean = Exchanges.contains(this)

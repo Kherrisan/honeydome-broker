@@ -16,14 +16,12 @@ import io.vertx.kotlin.coroutines.await
 import io.vertx.kotlin.coroutines.awaitResult
 import io.vertx.kotlin.coroutines.receiveChannelHandler
 import kotlinx.coroutines.channels.consumeEach
-import kotlinx.coroutines.channels.last
-import kotlinx.coroutines.flow.consumeAsFlow
-import kotlinx.coroutines.flow.receiveAsFlow
 import kotlinx.coroutines.launch
 import org.slf4j.LoggerFactory
 import java.time.ZonedDateTime
 
-const val API_YAML_PATH = "src/main/openapi/api.yaml"
+const val API_YAML_PATH =
+    "https://raw.githubusercontent.com/Kherrisan/honeydome-broker/master/src/main/openapi/broker.yaml"
 
 object Web {
     private val logger = LoggerFactory.getLogger(this::class.java)
@@ -71,7 +69,7 @@ class WebVerticle : CoroutineVerticle() {
         handler(adaptor)
     }
 
-    suspend fun handleGetKlines(ctx: RoutingContext) = ctx.request().run {
+    private suspend fun handleGetKlines(ctx: RoutingContext): Unit = ctx.request().run {
         val exchange = getParam("exchange").toLowerCase()
         val symbol = getParam("symbol").toLowerCase()
         val period = KlinePeriod.valueOf(getParam("period").toUpperCase())
@@ -98,18 +96,17 @@ class WebVerticle : CoroutineVerticle() {
         resp.end()
     }
 
-    suspend fun handleQueryLatestBalance(ctx: RoutingContext) = ctx.request().run {
+    private suspend fun handleQueryLatestBalance(ctx: RoutingContext): Unit = ctx.request().run {
         val exchange = getParam("exchange").toLowerCase()
-        val snapshot = BalanceSnapshot(exchange, ZonedDateTime.now(), exchange.spot().getBalance()).ignoreZeroBalance()
+        val snapshot = BalanceSnapshot(exchange, exchange.spot().getBalance(), ZonedDateTime.now())
         response().end(gson().toJson(snapshot))
     }
 
-    suspend fun handleQueryHistoryBalance(ctx: RoutingContext) = ctx.request().run {
+    private suspend fun handleQueryHistoryBalance(ctx: RoutingContext): Unit = ctx.request().run {
         val exchange = getParam("exchange").toLowerCase()
         val end = getParam("end")?.let { ZonedDateTime.parse(it) } ?: ZonedDateTime.now()
         val start = getParam("start")?.let { ZonedDateTime.parse(it) } ?: end.minusDays(5)
         val snapshots = BalanceRepository.queryByExchangeAndDatetimeRange(exchange, start, end)
-        snapshots.forEach { it.ignoreZeroBalance() }
         response().end(gson().toJson(snapshots))
     }
 }

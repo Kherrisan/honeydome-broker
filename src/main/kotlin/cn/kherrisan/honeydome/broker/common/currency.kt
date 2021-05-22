@@ -5,7 +5,6 @@ typealias Currency = String
 const val BTC: Currency = "btc"
 const val ETH: Currency = "eth"
 const val USDT: Currency = "usdt"
-const val EMPTY = "empty"
 
 val COMMON_QUOTES = listOf(BTC, ETH, USDT)
 

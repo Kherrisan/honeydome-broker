@@ -88,7 +88,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
 
     private val tradingWs = DefaultWebsocket("wss://api.huobi.pro/ws/v2", handle = { buffer ->
         val clear = buffer.bytes.decodeToString()
-        logger.debug(clear)
+        logger.trace(clear)
         val obj = JsonParser.parseString(clear).asJsonObject
         when (obj["action"].asString) {
             "ping" -> {
@@ -426,7 +426,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         sign("GET", authUrl("/v1/order/orders/$oid/matchresults"), params)
         val resp = http.get(authUrl("/v1/order/orders/$oid/matchresults?${sortedUrlEncode(params)}"))
         checkResponse(resp)
-        return resp.toJsonElement()["data"].asJsonArray.map { it.asJsonObject }
+        return resp.toJsonElement()["data"].asJsonArray
             .map {
                 val fc = it["fee-currency"].asString
                 OrderMatch(
@@ -462,7 +462,7 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         val signedUrl = "/v1/order/orders?${sortedUrlEncode(params)}"
         val resp = http.get(authUrl(signedUrl))
         checkResponse(resp)
-        return resp.toJsonElement()["data"].asJsonArray.map { it.asJsonObject }
+        return resp.toJsonElement()["data"].asJsonArray
             .map {
                 Order(
                     HUOBI,
@@ -484,6 +484,20 @@ class HuobiSpotApi : SpotApi, DecimalAdaptor, TextAdaptor {
         sign("POST", "/v1/order/orders/${oid}/submitcancel", params)
         val resp = http.post(authUrl("/v1/order/orders/${oid}/submitcancel?${sortedUrlEncode(params)}"))
         checkResponse(resp)
+    }
+
+    override suspend fun getFee(symbol: Symbol): Fee {
+        val params = mutableMapOf(
+            "symbols" to symbol.replace(DEFAULT_SYMBOL_SPLITTER, "")
+        )
+        sign("GET", authUrl("/v2/reference/transact-fee-rate"), params)
+        val resp = http.get(authUrl("/v2/reference/transact-fee-rate?${sortedUrlEncode(params)}"))
+        return resp.toJsonElement()["data"].asJsonArray.map {
+            Fee(
+                it["takerFeeRate"].asString.toBigDecimal(),
+                it["makerFeeRate"].asString.toBigDecimal()
+            )
+        }.first()
     }
 
     override suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String {

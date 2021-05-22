@@ -34,6 +34,7 @@ interface SpotApi {
     ): List<Order>
 
     suspend fun cancelOrder(oid: String, symbol: Symbol)
+    suspend fun getFee(symbol: Symbol): Fee
     suspend fun limitBuy(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String
     suspend fun limitSell(symbol: Symbol, amount: BigDecimal, price: BigDecimal, cid: String): String
     suspend fun marketBuy(symbol: Symbol, amount: BigDecimal, cid: String): String
@@ -53,8 +54,6 @@ interface SpotApi {
 const val DEFAULT_DECIMAL_SCALE = 4
 
 interface DecimalAdaptor {
-
-    fun BigDecimal.toPrice(symbol: Symbol) = price(this, symbol)
 
     fun price(raw: BigDecimal, symbol: Symbol): BigDecimal =
         raw.setScale(priceMap.getOrDefault(symbol, DEFAULT_DECIMAL_SCALE), RoundingMode.DOWN)
