@@ -1,8 +1,20 @@
 import org.jetbrains.kotlin.gradle.tasks.KotlinCompile
+import com.google.protobuf.gradle.generateProtoTasks
+import com.google.protobuf.gradle.id
+import com.google.protobuf.gradle.plugins
+import com.google.protobuf.gradle.protobuf
+import com.google.protobuf.gradle.protoc
+
+buildscript {
+    dependencies {
+        classpath("com.google.protobuf:protobuf-gradle-plugin:0.8.13")
+    }
+}
 
 plugins {
     kotlin("jvm") version "1.4.32"
     kotlin("plugin.serialization") version "1.4.32"
+    id("com.google.protobuf") version "0.8.13"
     application
 }
 
@@ -73,6 +85,39 @@ dependencies {
     testImplementation("org.jetbrains.kotlin:kotlin-test-junit5")
     testImplementation("org.junit.jupiter:junit-jupiter-api:5.6.0")
     testRuntimeOnly("org.junit.jupiter:junit-jupiter-engine:5.6.0")
+}
+
+sourceSets {
+    main {
+        java.srcDirs(
+            "build/generated/source/proto/main/grpc",
+            "build/generated/source/proto/main/java",
+            "build/generated/openapi/src/main/resources"
+        )
+        resources.srcDirs()
+    }
+}
+
+protobuf {
+    protoc {
+        artifact = "com.google.protobuf:protoc:3.11.0"
+    }
+    plugins {
+        id("grpc") {
+            artifact = "io.grpc:protoc-gen-grpc-java:1.32.1"
+        }
+        id("grpckt") {
+            artifact = "io.grpc:protoc-gen-grpc-kotlin:1.0.0:jdk7@jar"
+        }
+    }
+    generateProtoTasks {
+        all().forEach {
+            it.plugins {
+                id("grpc")
+                id("grpckt")
+            }
+        }
+    }
 }
 
 tasks.withType<Wrapper> {

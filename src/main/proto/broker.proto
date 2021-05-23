@@ -11,47 +11,10 @@ message Response{
   string msg = 2;
 }
 
-message ProcessRequest{
-  string id = 1;
-}
-
-message StartProcessRequest{
-  string id = 1;  //process id，由 engine 决定并传给 py 端
-  string name = 2;  //strategy 的名字，即文件名，xxx.py
-  uint32 port = 3;  //data feeding 的端口
-  map<string, string> args = 4; //其他参数
-}
-
-message TimerSchedulingRequest{
-  string pid = 1;
-  string name = 2;
-  uint64 ts = 3;
-}
-
-service TimerScheduling{
-  rpc schedule(TimerSchedulingRequest) returns (Response);
-}
-
 enum Exchange{
   HUOBI = 0;
   OKEX = 1;
   BINANCE = 2;
-}
-
-message StartProcessResponse{
-  message Subscription{
-    Exchange exchange = 1;
-    string symbol = 2;
-  }
-  repeated Subscription subscriptions = 1;
-  map<string, int32> timers = 2;
-  uint32 port = 3;
-}
-
-service ProcessManagement{
-  rpc start(StartProcessRequest) returns (StartProcessResponse);
-  rpc stop(ProcessRequest) returns (Response);
-  rpc ping(ProcessRequest) returns (Response);
 }
 
 message TickerResponse{
